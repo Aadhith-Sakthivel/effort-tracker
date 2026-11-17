@@ -172,17 +172,18 @@ table.data tr.clickable:hover td { background: var(--panel-2); cursor: pointer; 
 .composer .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
 
 /* Timesheet */
-.ts-wrap { overflow: auto; max-height: calc(100vh - 250px); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: var(--panel); }
-table.ts { border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.ts-wrap { overflow: auto; max-height: calc(100vh - 210px); min-height: 220px; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: var(--panel); }
+/* Fills the window: fixed sticky columns, day columns share the rest (min ~34px, then the grid scrolls). */
+table.ts { border-collapse: separate; border-spacing: 0; font-size: 13px; width: 100%; table-layout: fixed; }
 table.ts th, table.ts td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0; text-align: center; background-clip: padding-box; }
-table.ts thead th { position: sticky; top: 0; z-index: 3; background: var(--panel); padding: 6px 0 7px; font-weight: 600; width: 46px; min-width: 46px; }
+table.ts thead th { position: sticky; top: 0; z-index: 3; background: var(--panel); padding: 6px 0 7px; font-weight: 600; }
 table.ts thead th .d { display: inline-block; min-width: 24px; padding: 1px 0; border-radius: 999px; line-height: 20px; }
-table.ts thead th .dow { display: block; font-size: 10px; color: var(--muted); font-weight: 500; margin-top: 1px; }
+table.ts thead th .dow { display: block; font-size: 9.5px; letter-spacing: -.01em; color: var(--muted); font-weight: 500; margin-top: 1px; }
 table.ts thead th.frozen { color: var(--muted); }
-table.ts thead th.frozen .dow::after { content: " ·"; }
+
 table.ts thead th.today .d { background: var(--accent); color: #fff; }
-table.ts th.item, table.ts td.item { position: sticky; left: 0; z-index: 2; background: var(--panel); text-align: left; padding: 10px 12px; width: 230px; min-width: 230px; max-width: 230px; }
-table.ts th.cat, table.ts td.cat { position: sticky; left: 230px; z-index: 2; background: var(--panel); text-align: left; padding: 8px 12px; width: 140px; min-width: 140px; max-width: 140px;
+table.ts th.item, table.ts td.item { position: sticky; left: 0; z-index: 2; background: var(--panel); text-align: left; padding: 10px 12px; width: 190px; min-width: 190px; max-width: 190px; }
+table.ts th.cat, table.ts td.cat { position: sticky; left: 190px; z-index: 2; background: var(--panel); text-align: left; padding: 8px 10px; width: 116px; min-width: 116px; max-width: 116px;
   box-shadow: 1px 0 0 var(--line), 6px 0 10px -8px rgba(0, 0, 0, .25); }
 table.ts td.item { vertical-align: top; }
 table.ts td.item .title { overflow-wrap: anywhere; }
@@ -190,7 +191,7 @@ table.ts thead th.item, table.ts thead th.cat { z-index: 5; background: var(--pa
 table.ts td.weekend, table.ts th.weekend { background: var(--weekend); }
 table.ts td.today, table.ts th.today { background: var(--today); }
 table.ts td.frozen { background: var(--frozen); }
-table.ts input { display: block; width: 100%; height: 34px; border: none; background: transparent; text-align: center; padding: 0 2px; border-radius: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+table.ts input { display: block; width: 100%; height: 34px; border: none; background: transparent; text-align: center; padding: 0; border-radius: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 table.ts input:focus { box-shadow: inset 0 0 0 2px var(--accent); background: var(--panel); border-radius: 4px; }
 table.ts input:disabled { color: var(--muted); cursor: not-allowed; }
 table.ts input.dirty { background: var(--warn-soft); font-weight: 700; color: var(--warn); }
@@ -198,7 +199,7 @@ table.ts tfoot td { position: sticky; bottom: 0; z-index: 2; background: var(--p
 table.ts tfoot td.item { z-index: 4; background: var(--panel-2); }
 table.ts tfoot td.cat { z-index: 4; background: var(--panel-2); }
 table.ts tfoot td.over { color: var(--bad); background: var(--bad-soft); }
-table.ts th.total, table.ts td.total { position: sticky; right: 0; z-index: 2; background: var(--panel); font-weight: 600; padding: 0 10px; min-width: 60px; box-shadow: -1px 0 0 var(--line); }
+table.ts th.total, table.ts td.total { position: sticky; right: 0; z-index: 2; background: var(--panel); font-weight: 600; padding: 0 6px; width: 58px; box-shadow: -1px 0 0 var(--line); }
 table.ts thead th.total { z-index: 5; }
 table.ts tfoot td.total { z-index: 4; background: var(--panel-2); }
 table.ts tbody tr.group-end td { border-bottom: 1px solid rgba(60, 60, 67, .28); }
@@ -308,9 +309,8 @@ tr.clickable:focus-visible td, .card:focus-visible, .list-item:focus-visible { o
 .toolbar-top { margin-top: 12px; }
 
 /* ---- Richer work items + polish ---- */
-.view > * { animation: rise .22s ease-out both; }
-@keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-button:active:not(:disabled) { transform: scale(.98); }
+/* (page entrance moved to the Motion section below) */
+
 .icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
 button .icon { margin-right: 2px; }
 .section { margin-top: 16px; }
@@ -369,3 +369,92 @@ ul.due-list li:first-child { border-top: none; }
 ul.due-list a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 @media (max-width: 560px) { ul.due-list li { grid-template-columns: minmax(0, 1fr) auto; } ul.due-list li .muted.small { display: none; } }
 .column-empty { padding: 18px 8px; text-align: center; color: var(--muted); font-size: 13px; border: 1px dashed var(--line); border-radius: 10px; }
+
+/* ===== Motion =====
+   One set of curves and durations, used everywhere. Ease-out curves feel fast at the start and settle
+   gently (Apple-style); the spring curve overshoots slightly for things that "pop" into place. */
+:root {
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+  --dur-1: .16s; --dur-2: .28s; --dur-3: .5s; --dur-4: .9s;
+}
+
+/* Page entrance: only on navigation (app.js adds .view-enter), children rise in a short stagger. */
+.view.view-enter > * { animation: rise var(--dur-3) var(--ease-out) both; }
+.view.view-enter > *:nth-child(2) { animation-delay: 40ms; }
+.view.view-enter > *:nth-child(3) { animation-delay: 80ms; }
+.view.view-enter > *:nth-child(4) { animation-delay: 120ms; }
+.view.view-enter > *:nth-child(n+5) { animation-delay: 160ms; }
+.view.view-enter .grid > * { animation: rise var(--dur-3) var(--ease-out) both; }
+.view.view-enter .grid > *:nth-child(2) { animation-delay: 50ms; }
+.view.view-enter .grid > *:nth-child(3) { animation-delay: 100ms; }
+.view.view-enter .grid > *:nth-child(4) { animation-delay: 150ms; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* Controls */
+button, .btn { transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
+  transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), filter var(--dur-1) var(--ease-out); }
+button:active:not(:disabled) { transform: scale(.97); transition-duration: 60ms; }
+input, select, textarea { transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
+nav a, .tabs button, .list-item, tr.clickable td { transition: background-color var(--dur-2) var(--ease-out), color var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+nav a svg { transition: stroke var(--dur-1) var(--ease-out); }
+
+/* Surfaces lift gently on hover */
+.card, .member, .panel.kpi { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); will-change: transform; }
+.card:hover, .member:hover, .panel.kpi:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0, 0, 0, .04), 0 12px 28px rgba(0, 0, 0, .08); }
+.card.dragging { transform: scale(1.02) rotate(-1deg); box-shadow: 0 16px 40px rgba(0, 0, 0, .18); }
+.column { transition: background-color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
+
+/* Modal: backdrop fades, sheet scales up with a soft spring; .closing plays it in reverse */
+.backdrop { animation: fade-in var(--dur-2) var(--ease-out) both; }
+.backdrop .modal { animation: sheet-in var(--dur-3) var(--ease-spring) both; }
+.backdrop.closing { animation: fade-out var(--dur-1) var(--ease-in-out) both; }
+.backdrop.closing .modal { animation: sheet-out var(--dur-1) var(--ease-in-out) both; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(12px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes sheet-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(.98); } }
+
+/* Toasts slide up, leave by fading down */
+.toast { animation: toast-in var(--dur-3) var(--ease-spring) both; }
+.toast.leaving { animation: toast-out var(--dur-2) var(--ease-in-out) both; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(8px); } }
+
+/* Meters and bars fill from the start */
+.meter > div, .bar-fill, .viz-hbars .fill { transform-origin: left center; animation: grow-x var(--dur-4) var(--ease-out) both; }
+@keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* Charts draw themselves in */
+.viz-donut svg .arcs { transform-origin: 80px 80px; animation: donut-in var(--dur-4) var(--ease-out) both; }
+@keyframes donut-in { from { opacity: 0; transform: rotate(-90deg) scale(.86); } to { opacity: 1; transform: none; } }
+.viz-donut .viz-center, .viz-donut .viz-center-label { animation: fade-in var(--dur-3) var(--ease-out) .25s both; }
+.viz-legend li { animation: rise var(--dur-3) var(--ease-out) both; }
+.viz-legend li:nth-child(2) { animation-delay: 40ms; } .viz-legend li:nth-child(3) { animation-delay: 80ms; }
+.viz-legend li:nth-child(4) { animation-delay: 120ms; } .viz-legend li:nth-child(n+5) { animation-delay: 160ms; }
+.viz-stroke { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.1s var(--ease-in-out) .1s forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.viz-area { animation: area-in var(--dur-4) var(--ease-out) .5s both; }
+@keyframes area-in { from { opacity: 0; } to { opacity: .14; } }
+.viz-bar { transform-box: fill-box; transform-origin: bottom; animation: grow-y var(--dur-4) var(--ease-spring) both; }
+@keyframes grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.viz-cross, .viz-dot { transition: transform 80ms linear; }
+.viz-tip { transition: opacity var(--dur-1) var(--ease-out); }
+
+/* Timesheet edits and empty states */
+table.ts input { transition: background-color var(--dur-2) var(--ease-out), color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+.empty-icon { animation: pop var(--dur-3) var(--ease-spring) both; }
+@keyframes pop { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: none; } }
+.skeleton { animation: fade-in var(--dur-2) var(--ease-out) .12s both; } /* skip the flash on fast loads */
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover, .member:hover, .panel.kpi:hover { transform: none; }
+  .viz-stroke { stroke-dashoffset: 0; }
+}
+
+@media (max-width: 860px) {
+  table.ts th.item, table.ts td.item { width: 150px; min-width: 150px; max-width: 150px; padding: 8px; }
+  table.ts th.cat, table.ts td.cat { left: 150px; width: 100px; min-width: 100px; max-width: 100px; padding: 8px; }
+  .ts-wrap { max-height: calc(100vh - 180px); }
+}

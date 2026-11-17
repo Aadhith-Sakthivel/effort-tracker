@@ -1,5 +1,5 @@
 import { api, qs } from '../api.js';
-import { esc, fmtH, fmtDate, options, icon, dueInfo } from '../ui.js';
+import { esc, fmtH, fmtDate, options, icon, dueInfo, countUp } from '../ui.js';
 import { state } from '../state.js';
 import { doughnut, line, columns, bars } from '../charts.js';
 
@@ -17,12 +17,12 @@ export async function render(el) {
   el.innerHTML = `
     <div class="page-head"><div><h1>Overview</h1><div class="muted small">Active work items and logged effort</div></div></div>
     <div class="grid kpis">
-      <div class="panel kpi"><div class="label">Work items</div><div class="value">${k.active_items}</div><div class="sub">active</div></div>
-      <div class="panel kpi"><div class="label">Open</div><div class="value">${k.open_items}</div>
+      <div class="panel kpi"><div class="label">Work items</div><div class="value"><span data-count="${k.active_items}">${k.active_items}</span></div><div class="sub">active</div></div>
+      <div class="panel kpi"><div class="label">Open</div><div class="value"><span data-count="${k.open_items}">${k.open_items}</span></div>
         <div class="sub">${k.overdue ? `<span class="badge bad">${k.overdue} overdue</span>` : 'none overdue'}</div></div>
-      <div class="panel kpi"><div class="label">Actual hours</div><div class="value">${fmtH(k.actual_hours)}</div>
+      <div class="panel kpi"><div class="label">Actual hours</div><div class="value"><span data-count="${k.actual_hours}" data-suffix="h">${fmtH(k.actual_hours)}</span></div>
         <div class="meter"><div style="width:${Math.min(pct, 100)}%"></div></div><div class="sub">${pct}% of approved</div></div>
-      <div class="panel kpi"><div class="label">Approved hours</div><div class="value">${fmtH(k.approved_hours)}</div>
+      <div class="panel kpi"><div class="label">Approved hours</div><div class="value"><span data-count="${k.approved_hours}" data-suffix="h">${fmtH(k.approved_hours)}</span></div>
         <div class="sub">${d.support.open} open support task${d.support.open === 1 ? '' : 's'}${d.support.overdue ? ` · <span class="badge bad">${d.support.overdue} late</span>` : ''}</div></div>
     </div>
 
@@ -78,6 +78,7 @@ export async function render(el) {
   columns(c('itemcat'), d.itemsByCategory.map((r) => ({ label: r.label, value: r.n })), { unit: ' items', integer: true });
   bars(c('hourcat'), d.hoursByCategory.map((r) => ({ label: r.label, value: r.hours })), { unit: 'h' });
 
+  countUp(el);
   el.querySelector('[data-month]').onchange = (e) => { view.month = e.target.value; render(el); };
 
   // Charts draw at real pixel width, so redraw when the window size changes.

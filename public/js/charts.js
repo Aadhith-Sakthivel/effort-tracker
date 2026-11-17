@@ -91,7 +91,7 @@ export function doughnut(el, items, { centerValue, centerLabel = '', unit = '', 
   const center = centerValue ?? fmtNum(total);
   el.innerHTML = `<div class="viz-donut ${legend === 'below' ? 'below' : ''}">
     <svg viewBox="0 0 160 160" role="img" aria-label="${esc(`${centerLabel}: ${data.map((d) => `${d.label} ${fmtNum(d.value)}${unit}`).join(', ')}`)}">
-      ${arcs}
+      <g class="arcs">${arcs}</g>
       <text x="${C}" y="${C - 2}" text-anchor="middle" class="viz-center">${esc(center)}</text>
       <text x="${C}" y="${C + 16}" text-anchor="middle" class="viz-center-label">${esc(centerLabel)}</text>
     </svg>
@@ -122,7 +122,7 @@ export function line(el, points, { unit = '', area = true, height = 200, refValu
       <text x="${L - 6}" y="${y(t) + 4}" text-anchor="end" class="viz-axis">${fmtNum(t)}</text>`).join('')}
     ${refValue ? `<line x1="${L}" x2="${W - Rr}" y1="${y(refValue)}" y2="${y(refValue)}" class="viz-ref"></line>` : ''}
     ${area ? `<path d="${path} L${x(points.length - 1)},${y(0)} L${x(0)},${y(0)} Z" class="viz-area"></path>` : ''}
-    <path d="${path}" class="viz-stroke" vector-effect="non-scaling-stroke"></path>
+    <path d="${path}" class="viz-stroke" pathLength="1" vector-effect="non-scaling-stroke"></path>
     ${points.map((p, i) => (i % every === 0 || i === points.length - 1
       ? `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" class="viz-axis">${esc(p.short)}</text>` : '')).join('')}
     <line class="viz-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" style="display:none" vector-effect="non-scaling-stroke"></line>

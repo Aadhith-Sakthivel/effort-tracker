@@ -58,7 +58,7 @@ export async function render(el, params = {}) {
       <div class="toolbar" style="margin:0"><span class="muted small" data-dirtycount></span>
         <button data-discard disabled>Discard</button><button class="primary" data-save disabled>Review &amp; save</button></div>
     </div>
-    ${d.rows.length ? `<div class="ts-wrap"><table class="ts">
+    ${d.rows.length ? `<div class="ts-wrap"><table class="ts" style="min-width:${(innerWidth <= 860 ? 250 : 360) + d.days.length * 25}px">
       <thead><tr><th class="item">Work item</th><th class="cat">Category</th>
         ${d.days.map((day) => {
           const i = dayInfo(day);
@@ -84,6 +84,15 @@ export async function render(el, params = {}) {
         <td class="total num" data-grand>${fmtH(d.days.reduce((s, day) => s + dayTotal(day), 0))}</td></tr></tfoot>
     </table>${addRow}</div>`
     : `<div class="panel" style="padding:0">${emptyState('calendar', 'Nothing on this timesheet yet', 'Items this person owns, or has logged time on this month, appear automatically.')}${addRow}</div>`}`;
+
+  // Re-fit the grid when crossing the phone breakpoint (column widths change); skip if edits are unsaved.
+  window.removeEventListener('resize', view.onResize || (() => {}));
+  let wasNarrow = innerWidth <= 860;
+  view.onResize = () => {
+    const narrow = innerWidth <= 860;
+    if (narrow !== wasNarrow && !dirty.size && el.isConnected && location.hash.startsWith('#/timesheet')) { wasNarrow = narrow; render(el); }
+  };
+  window.addEventListener('resize', view.onResize);
 
   const addSel = el.querySelector('[data-addsel]');
   if (addSel) addSel.onchange = async () => {

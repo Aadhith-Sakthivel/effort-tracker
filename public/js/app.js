@@ -52,6 +52,7 @@ function renderWhoami() {
 }
 
 let renderSeq = 0;
+let lastRoute = '';
 export async function render() {
   const { name, params } = parseHash();
   const seq = ++renderSeq;
@@ -63,7 +64,17 @@ export async function render() {
     view.innerHTML = `<div class="skeleton" aria-busy="true" aria-label="Loading"><div class="bone title"></div>
       <div class="grid kpis"><div class="bone block"></div><div class="bone block"></div><div class="bone block"></div></div><div class="bone block"></div></div>`;
     view.setAttribute('aria-busy', 'true');
+    const routeKey = `${name}|${params.id || ''}`;
+    const entering = routeKey !== lastRoute;
+    lastRoute = routeKey;
     await mod.render(view, params);
+    if (entering) {
+      view.classList.remove('view-enter');
+      void view.offsetWidth; // restart the animation
+      view.classList.add('view-enter');
+      clearTimeout(render.enterTimer);
+      render.enterTimer = setTimeout(() => view.classList.remove('view-enter'), 900);
+    }
   } catch (e) {
     if (seq !== renderSeq) return;
     view.innerHTML = `<div class="panel empty">Couldn't load this page: ${esc(e.message)} <button data-retry>Try again</button></div>`;

@@ -23,7 +23,7 @@ export function toast(message, kind = 'info') {
   el.className = `toast ${kind}`;
   el.textContent = message;
   document.getElementById('toasts').append(el);
-  setTimeout(() => el.remove(), kind === 'error' ? 6000 : 3000);
+  setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 300); }, kind === 'error' ? 6000 : 3000);
 }
 
 // Run an async action; show its error as a toast. Returns the result or undefined.
@@ -44,7 +44,15 @@ export function openModal({ title, body, footer = '', wide = false, onClose }) {
   back.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <header><h2 style="margin:0">${esc(title)}</h2><button class="link" data-close aria-label="Close">✕</button></header>
     <div class="content">${body}</div>${footer ? `<footer>${footer}</footer>` : ''}</div>`;
-  const close = () => { back.remove(); document.removeEventListener('keydown', onKey); onClose && onClose(); };
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener('keydown', onKey);
+    back.classList.add('closing');
+    setTimeout(() => back.remove(), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160);
+    onClose && onClose();
+  };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   back.addEventListener('click', (e) => { if (e.target === back || e.target.closest('[data-close]')) close(); });
   document.addEventListener('keydown', onKey);
@@ -119,6 +127,25 @@ export const options = (list, selected, { value = 'id', label = 'label', blank }
 export function statusBadge(code, label) {
   const kind = { done: 'ok', completed: 'ok', in_review: 'accent', in_progress: 'accent', blocked: 'bad', hold: 'warn', cancelled: 'bad', withdrawn: 'bad', queued: '', new: '' }[code] || '';
   return `<span class="badge ${kind}">${esc(label || code)}</span>`;
+}
+
+// Animate numbers from 0 to their value (ease-out, ~700ms). Respects reduced motion.
+export function countUp(root) {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  root.querySelectorAll('[data-count]').forEach((el) => {
+    const target = Number(el.dataset.count);
+    const suffix = el.dataset.suffix || '';
+    const decimals = String(el.dataset.count).includes('.') ? 1 : 0;
+    const show = (v) => { el.textContent = `${v.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}${suffix}`; };
+    if (reduce || !target) { show(target); return; }
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / 700);
+      show(target * (1 - (1 - t) ** 3));
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
 }
 
 // Small line icons (stroke uses currentColor so they follow text colour).

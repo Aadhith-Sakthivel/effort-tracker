@@ -34,13 +34,19 @@ async function lakebasePassword() {
 async function connect() {
   if (process.env.PGHOST) {
     const { Pool } = require('pg');
+    // The app keeps its tables in its own schema: on Postgres 15+ an app role usually can't create in
+    // "public", but a role allowed to create in the database can create (and own) a schema.
+    const schema = process.env.PGSCHEMA || 'effort_tracker';
+    if (!/^[a-z_][a-z0-9_]*$/.test(schema)) throw new Error(`Invalid PGSCHEMA "${schema}"`);
     const pool = new Pool({
       password: lakebasePassword, // pg calls this per new connection, so tokens refresh themselves
       ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false },
       max: 5,
     });
+    pool.on('connect', (client) => { client.query(`SET search_path TO ${schema}`).catch(() => {}); });
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
     backend = {
-      name: `postgres (${process.env.PGHOST})`,
+      name: `postgres (${process.env.PGHOST}, schema ${schema})`,
       query: (sql, params) => pool.query(sql, params).then((r) => r.rows),
       exec: (sql) => pool.query(sql),
       tx: async (fn) => {

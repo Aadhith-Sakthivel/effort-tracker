@@ -1,0 +1,14 @@
+# Databricks Apps configuration.
+# Add a Lakebase database as an app resource; Databricks then injects PGHOST, PGPORT, PGDATABASE,
+# PGUSER and PGSSLMODE, and the app mints its database password from its service principal.
+command: ['node', 'server.js']
+
+env:
+  - name: SEED_DEMO          # set to 'true' only for a demo workspace
+    value: 'false'
+  - name: DEV_LOGIN          # the "Sign in as" picker is for local use only
+    value: 'false'
+  - name: BUSINESS_TZ
+    value: 'Asia/Kolkata'
+  - name: LEAD_LOGINS        # comma-separated emails that become leads on first sign-in
+    value: 'you@example.com'

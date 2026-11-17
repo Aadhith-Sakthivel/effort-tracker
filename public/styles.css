@@ -376,75 +376,81 @@ ul.due-list a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; 
 :root {
   --ease-out: cubic-bezier(.22, 1, .36, 1);
   --ease-in-out: cubic-bezier(.65, 0, .35, 1);
-  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
-  --dur-1: .16s; --dur-2: .28s; --dur-3: .5s; --dur-4: .9s;
+  /* Springs (CSS linear() curves sampled from a damped spring). Browsers without linear() fall back to ease. */
+  --ease-spring: linear(0, .006, .025 2.8%, .101 6.1%, .539 18.9%, .721 25.3%, .849 31.5%, .937 38.1%, .968 41.8%, .991 45.7%, 1.006 50.1%,
+    1.015 55%, 1.017 63.9%, 1.001 85.6%, 1);
+  --spring-bouncy: linear(0, .009, .035 2.1%, .141, .281 6.7%, .723 12.9%, .938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161,
+    1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, .991, .977 51%, .974 53.8%, .975 57.1%, .997 69.8%, 1.003 76.9%, 1.004 83.8%, 1);
+  --dur-1: .16s; --dur-2: .3s; --dur-3: .6s; --dur-4: .9s; --dur-spring: .75s;
 }
 
 /* Page entrance: only on navigation (app.js adds .view-enter), children rise in a short stagger. */
-.view.view-enter > * { animation: rise var(--dur-3) var(--ease-out) both; }
+.view.view-enter > * { animation: rise var(--dur-spring) var(--ease-spring) both; }
 .view.view-enter > *:nth-child(2) { animation-delay: 40ms; }
 .view.view-enter > *:nth-child(3) { animation-delay: 80ms; }
 .view.view-enter > *:nth-child(4) { animation-delay: 120ms; }
 .view.view-enter > *:nth-child(n+5) { animation-delay: 160ms; }
-.view.view-enter .grid > * { animation: rise var(--dur-3) var(--ease-out) both; }
+.view.view-enter .grid > * { animation: rise var(--dur-spring) var(--ease-spring) both; }
 .view.view-enter .grid > *:nth-child(2) { animation-delay: 50ms; }
 .view.view-enter .grid > *:nth-child(3) { animation-delay: 100ms; }
 .view.view-enter .grid > *:nth-child(4) { animation-delay: 150ms; }
-@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.985); } 40% { opacity: 1; } to { opacity: 1; transform: none; } }
 
 /* Controls */
 button, .btn { transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
-  transform var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), filter var(--dur-1) var(--ease-out); }
-button:active:not(:disabled) { transform: scale(.97); transition-duration: 60ms; }
+  transform var(--dur-3) var(--spring-bouncy), box-shadow var(--dur-2) var(--ease-out), filter var(--dur-1) var(--ease-out); }
+button:active:not(:disabled) { transform: scale(.94); transition: transform 70ms var(--ease-out); }
 input, select, textarea { transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
 nav a, .tabs button, .list-item, tr.clickable td { transition: background-color var(--dur-2) var(--ease-out), color var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
 nav a svg { transition: stroke var(--dur-1) var(--ease-out); }
 
 /* Surfaces lift gently on hover */
-.card, .member, .panel.kpi { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); will-change: transform; }
-.card:hover, .member:hover, .panel.kpi:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0, 0, 0, .04), 0 12px 28px rgba(0, 0, 0, .08); }
-.card.dragging { transform: scale(1.02) rotate(-1deg); box-shadow: 0 16px 40px rgba(0, 0, 0, .18); }
+.card, .member, .panel.kpi { transition: transform var(--dur-spring) var(--spring-bouncy), box-shadow var(--dur-2) var(--ease-out); will-change: transform; }
+.card:hover, .member:hover, .panel.kpi:hover { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(0, 0, 0, .04), 0 12px 28px rgba(0, 0, 0, .08); }
+.card.dragging { transform: scale(1.04) rotate(-1.5deg); box-shadow: 0 16px 40px rgba(0, 0, 0, .18); }
 .column { transition: background-color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
 
 /* Modal: backdrop fades, sheet scales up with a soft spring; .closing plays it in reverse */
 .backdrop { animation: fade-in var(--dur-2) var(--ease-out) both; }
-.backdrop .modal { animation: sheet-in var(--dur-3) var(--ease-spring) both; }
+.backdrop .modal { animation: sheet-in var(--dur-spring) var(--spring-bouncy) both; }
 .backdrop.closing { animation: fade-out var(--dur-1) var(--ease-in-out) both; }
 .backdrop.closing .modal { animation: sheet-out var(--dur-1) var(--ease-in-out) both; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
-@keyframes sheet-in { from { opacity: 0; transform: translateY(12px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(20px) scale(.92); } 30% { opacity: 1; } to { opacity: 1; transform: none; } }
 @keyframes sheet-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(.98); } }
 
 /* Toasts slide up, leave by fading down */
-.toast { animation: toast-in var(--dur-3) var(--ease-spring) both; }
+.toast { animation: toast-in var(--dur-spring) var(--spring-bouncy) both; }
 .toast.leaving { animation: toast-out var(--dur-2) var(--ease-in-out) both; }
-@keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(24px) scale(.9); } 30% { opacity: 1; } to { opacity: 1; transform: none; } }
 @keyframes toast-out { to { opacity: 0; transform: translateY(8px); } }
 
 /* Meters and bars fill from the start */
-.meter > div, .bar-fill, .viz-hbars .fill { transform-origin: left center; animation: grow-x var(--dur-4) var(--ease-out) both; }
+.meter > div, .bar-fill, .viz-hbars .fill { transform-origin: left center; animation: grow-x 1s var(--ease-spring) both; }
 @keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 /* Charts draw themselves in */
-.viz-donut svg .arcs { transform-origin: 80px 80px; animation: donut-in var(--dur-4) var(--ease-out) both; }
+.viz-donut svg .arcs { transform-origin: 80px 80px; animation: donut-in 1s var(--ease-spring) both; }
 @keyframes donut-in { from { opacity: 0; transform: rotate(-90deg) scale(.86); } to { opacity: 1; transform: none; } }
 .viz-donut .viz-center, .viz-donut .viz-center-label { animation: fade-in var(--dur-3) var(--ease-out) .25s both; }
-.viz-legend li { animation: rise var(--dur-3) var(--ease-out) both; }
+.viz-legend li { animation: rise var(--dur-spring) var(--ease-spring) both; }
 .viz-legend li:nth-child(2) { animation-delay: 40ms; } .viz-legend li:nth-child(3) { animation-delay: 80ms; }
 .viz-legend li:nth-child(4) { animation-delay: 120ms; } .viz-legend li:nth-child(n+5) { animation-delay: 160ms; }
 .viz-stroke { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.1s var(--ease-in-out) .1s forwards; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 .viz-area { animation: area-in var(--dur-4) var(--ease-out) .5s both; }
 @keyframes area-in { from { opacity: 0; } to { opacity: .14; } }
-.viz-bar { transform-box: fill-box; transform-origin: bottom; animation: grow-y var(--dur-4) var(--ease-spring) both; }
+.viz-bar { transform-box: fill-box; transform-origin: bottom; animation: grow-y 1s var(--spring-bouncy) both; }
+.viz-bars .viz-bar:nth-of-type(2) { animation-delay: 50ms; } .viz-bars .viz-bar:nth-of-type(3) { animation-delay: 100ms; }
+.viz-bars .viz-bar:nth-of-type(4) { animation-delay: 150ms; } .viz-bars .viz-bar:nth-of-type(n+5) { animation-delay: 200ms; }
 @keyframes grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 .viz-cross, .viz-dot { transition: transform 80ms linear; }
 .viz-tip { transition: opacity var(--dur-1) var(--ease-out); }
 
 /* Timesheet edits and empty states */
 table.ts input { transition: background-color var(--dur-2) var(--ease-out), color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
-.empty-icon { animation: pop var(--dur-3) var(--ease-spring) both; }
+.empty-icon { animation: pop var(--dur-spring) var(--spring-bouncy) both; }
 @keyframes pop { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: none; } }
 .skeleton { animation: fade-in var(--dur-2) var(--ease-out) .12s both; } /* skip the flash on fast loads */
 
@@ -458,3 +464,7 @@ table.ts input { transition: background-color var(--dur-2) var(--ease-out), colo
   table.ts th.cat, table.ts td.cat { left: 150px; width: 100px; min-width: 100px; max-width: 100px; padding: 8px; }
   .ts-wrap { max-height: calc(100vh - 180px); }
 }
+
+nav a.active, .tabs button.active { animation: select-pop var(--dur-3) var(--spring-bouncy); }
+@keyframes select-pop { from { transform: scale(.94); } to { transform: none; } }
+.nav-badge { animation: pop var(--dur-spring) var(--spring-bouncy) both; }

@@ -63,7 +63,7 @@ async function connect() {
     const db = new PGlite(process.env.DATA_DIR || path.join(__dirname, '..', '.data'));
     await db.waitReady;
     backend = {
-      name: `embedded postgres (PGlite, ${process.env.DATA_DIR ? 'test data' : './.data'})`,
+      name: `embedded postgres (PGlite, ${process.env.DATA_DIR || './.data'})`,
       query: (sql, params) => db.query(sql, params).then((r) => r.rows),
       exec: (sql) => db.exec(sql),
       tx: (fn) => db.transaction((t) => fn((sql, params) => t.query(sql, params).then((r) => r.rows))),

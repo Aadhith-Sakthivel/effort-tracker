@@ -59,6 +59,8 @@ npm test             # 12 requirement tests against a throwaway database
 See [REQUIREMENTS.md](REQUIREMENTS.md) for the spec-to-code checklist.
 
 ## Deploy to Databricks Apps
+> **Status:** deployed and running on Databricks Apps (Free Edition), with SSO sign-in and server-side roles. Verified on 17 Nov 2026.
+
 1. Create a Lakebase database instance and database.
 2. Create a custom app from this folder and add the database as an app resource (role: *Can connect and create*).
 3. In `app.yaml`, set `LEAD_LOGINS` to your workspace email. Keep `DEV_LOGIN: false`.

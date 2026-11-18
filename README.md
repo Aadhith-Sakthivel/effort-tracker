@@ -30,14 +30,14 @@ no audit trail) with a validated, logged web app deployed as a **Databricks App*
 ## Architecture
 
 ```
-React SPA (Apple-style UI)  ──HTTP──>  FastAPI  ──SQL──>  Lakebase (Postgres, OLTP)
+React SPA (clean, minimal UI)  ──HTTP──>  FastAPI  ──SQL──>  Lakebase (Postgres, OLTP)
    frontend/                           backend/            backend/sql/001_schema.sql
                                                               │ optional nightly sync
                                                               ▼
                                                    Delta table (Unity Catalog) → BI
 ```
 
-- **Frontend** — React 18 + Vite, Recharts, Framer Motion. Apple HIG design system (`frontend/src/styles.css`).
+- **Frontend** — React 18 + Vite, Recharts, Framer Motion. Custom design system: tokens, light/dark themes, motion (`frontend/src/styles.css`).
 - **Backend** — FastAPI + SQLAlchemy. SSO user resolved from Databricks forwarded headers; three server-enforced roles (lead / member / viewer).
 - **Data** — Lakebase (managed Postgres) for live/edit/audit; can be mirrored to Delta for reporting.
 - **Local dev** — falls back to a SQLite file automatically, so it runs with zero infra.
@@ -111,7 +111,7 @@ backend/
   tests/          API behaviour tests (throwaway SQLite)
 frontend/
   src/pages/      Overview, Enhancements, Board, Timesheet, Support, Team, Audit, Settings
-  src/components/ shared UI (Apple design system)
+  src/components/ shared UI components and design tokens
 migration/
   seed_dummy.py        generate fictional demo data (SQLite or Lakebase)
   migrate_excel.py     optional: import a real workbook (un-pivots a wide daily grid)

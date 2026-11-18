@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { statusClass } from "../api";
 
-// Apple-style custom dropdown (native <select> can't be styled when open).
+// Custom styled dropdown (native <select> can't be styled when open).
 // The menu renders in a body portal with fixed positioning so it never gets
 // clipped by a scrollable/blurred ancestor (e.g. the modal).
 export function GlassSelect({ value, onChange, options, placeholder = "Select", minWidth = 160, align = "left", block = false, searchable = false }) {

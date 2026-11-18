@@ -1,6 +1,12 @@
+# Local-only files. The built SPA (frontend/dist) and app bundle (build/) are
+# produced by CI or `npm run build` + scripts/build_bundle.py, never committed.
 node_modules/
-.data/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.db
 .env
-*.log
-.claude/
-.data-broken-copy
+.vite/
+frontend/dist/
+build/

@@ -1,0 +1,378 @@
+/* ============================================================
+   Liquid Glass skin (CLEAR, 0px blur) — layered ON TOP of styles.css.
+   Reversible: remove the import in main.jsx to go back.
+   Pure clear glass: NO frost/blur, just a translucent tint + crisp
+   specular edges, over the vibrant ambient color field.
+   ============================================================ */
+
+:root {
+  --glass: rgba(255, 255, 255, 0.40);
+  --glass-strong: rgba(255, 255, 255, 0.62);  /* modal */
+  --glass-soft: rgba(255, 255, 255, 0.30);     /* sidebar */
+  --glass-stroke: rgba(255, 255, 255, 0.9);    /* crisp bright edge */
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.95);  /* specular top edge */
+  --glass-shadow: 0 8px 28px rgba(30, 40, 90, 0.12);
+  --glass-tint: saturate(140%);                /* clear: saturate only, no blur */
+  --text: #16171d;
+  --text-2: #4a4b57;
+  --text-3: #74757f;
+  --accent: #0a84ff;
+  --accent-hover: #3a9bff;
+  --accent-soft: rgba(10, 132, 255, 0.14);
+  /* separators (table rows, dividers) need contrast on the light bg — keep this a
+     faint GRAY. Bright glass panel edges use --glass-stroke, not --border. */
+  --border: rgba(0, 0, 0, 0.09);
+}
+
+/* Clean white backdrop */
+body {
+  background: #f5f6f8;
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  background: linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,255,255,0.42));
+  -webkit-backdrop-filter: var(--glass-tint);
+  backdrop-filter: var(--glass-tint);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-hi), 0 8px 26px rgba(30, 40, 90, 0.12);
+}
+.brand-logo {
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(30, 40, 90, 0.16), var(--glass-hi);
+}
+.nav-item { border-radius: 12px; }
+.nav-item:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: var(--glass-hi), 0 4px 12px rgba(30, 40, 90, 0.14);
+}
+.nav-item.active { color: #fff; background: none; }
+/* liquid-glass sliding pill */
+.nav-indicator {
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(10,132,255,0.95), rgba(70,150,255,0.95));
+  box-shadow: 0 8px 20px rgba(10, 132, 255, 0.42), var(--glass-hi);
+}
+
+/* ---------- Cards: clear glass, diagonal sheen, crisp edge ---------- */
+.card {
+  background: linear-gradient(135deg, rgba(255,255,255,0.52), rgba(255,255,255,0.36));
+  -webkit-backdrop-filter: var(--glass-tint);
+  backdrop-filter: var(--glass-tint);
+  border: 1px solid var(--glass-stroke);
+  border-radius: 22px;
+  box-shadow: var(--glass-shadow), var(--glass-hi);
+}
+
+/* ---------- Buttons ---------- */
+.btn-primary {
+  background: linear-gradient(135deg, rgba(10,132,255,0.96), rgba(60,140,255,0.96));
+  box-shadow: 0 5px 14px rgba(10, 132, 255, 0.32), var(--glass-hi);
+}
+.btn-primary:hover { background: linear-gradient(135deg, rgba(40,150,255,1), rgba(90,165,255,1)); }
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-hi), 0 3px 10px rgba(30, 40, 90, 0.14);
+}
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.72); box-shadow: var(--glass-hi), 0 5px 15px rgba(30, 40, 90, 0.2); }
+.btn-ghost:active { box-shadow: var(--glass-hi), 0 2px 6px rgba(30, 40, 90, 0.16); }
+.btn-primary:hover { box-shadow: 0 7px 18px rgba(10, 132, 255, 0.4), var(--glass-hi); }
+.btn-danger { box-shadow: var(--glass-hi), 0 3px 10px rgba(229, 72, 77, 0.18); }
+
+/* ---------- Inputs / selects / search ---------- */
+.search, select.filter, input, textarea, .form-select {
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-hi);
+}
+.search:focus, select.filter:focus, input:focus, textarea:focus, .form-select:focus {
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 0 0 4px var(--accent-soft), var(--glass-hi);
+  border-color: rgba(10, 132, 255, 0.5);
+}
+/* Search bar matches the dropdown look: same fill + lift shadow */
+.search {
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: var(--glass-hi), 0 4px 14px rgba(30, 40, 90, 0.14);
+}
+.search:hover { background: rgba(255, 255, 255, 0.72); box-shadow: var(--glass-hi), 0 6px 18px rgba(30, 40, 90, 0.18); }
+.search:focus { background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 4px var(--accent-soft), var(--glass-hi), 0 6px 18px rgba(30, 40, 90, 0.18); }
+/* soft lift on the dropdown pickers (e.g. the month picker) */
+select.filter { box-shadow: var(--glass-hi), 0 4px 14px rgba(30, 40, 90, 0.14); }
+select.filter:hover { box-shadow: var(--glass-hi), 0 6px 18px rgba(30, 40, 90, 0.18); }
+
+/* ---------- Pills / chips ---------- */
+.pill { box-shadow: var(--glass-hi); }
+.chip-opt { background: rgba(255, 255, 255, 0.4); border: 1px solid var(--glass-stroke); box-shadow: var(--glass-hi), 0 3px 10px rgba(30, 40, 90, 0.1); }
+.chip-opt:hover { box-shadow: var(--glass-hi), 0 5px 14px rgba(30, 40, 90, 0.16); }
+.chip-opt.on {
+  background: linear-gradient(135deg, rgba(10,132,255,0.95), rgba(70,150,255,0.95));
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(10, 132, 255, 0.3), var(--glass-hi);
+}
+
+/* ---------- Modal: wide, white, frosted glass ---------- */
+.overlay-blur {
+  background: rgba(100, 105, 125, 0.26);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.modal {
+  max-width: 1200px;
+  width: calc(100vw - 48px);
+  background: linear-gradient(135deg, rgba(255,255,255,0.97), rgba(255,255,255,0.92));
+  /* No backdrop-filter here: the background is near-opaque so the blur was invisible,
+     and animating scale over a blurred layer re-rasterizes it every frame (the flicker).
+     Promote to its own compositor layer for a smooth spring. */
+  border: 1px solid rgba(255, 255, 255, 0.98);
+  border-radius: 26px;
+  box-shadow: 0 30px 80px rgba(30, 40, 90, 0.26), var(--glass-hi);
+}
+/* Fields inside the popup sit WHITER than the frosted modal so they read as inputs */
+.modal input, .modal textarea, .modal .form-select, .modal .search {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 1px 2px rgba(30, 40, 90, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+.modal input:focus, .modal textarea:focus, .modal .form-select:focus {
+  background: #ffffff;
+  border-color: rgba(10, 132, 255, 0.5);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.modal .chip-opt:not(.on) { background: rgba(255, 255, 255, 0.85); }
+/* Card detail: two-column layout with a right aside (time doughnut + docs) */
+.cd-grid { display: flex; gap: 26px; align-items: flex-start; }
+.cd-main { flex: 1; min-width: 0; }
+.cd-aside {
+  width: 288px; flex: none; padding: 16px; border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55); border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-hi);
+}
+.cd-doc-link {
+  display: flex; align-items: center; gap: 8px; text-decoration: none;
+  color: var(--accent); font-size: 13.5px; font-weight: 600;
+  padding: 9px 12px; border-radius: 10px; background: rgba(10, 132, 255, 0.08);
+  border: 1px solid rgba(10, 132, 255, 0.2);
+}
+.cd-doc-link:hover { background: rgba(10, 132, 255, 0.14); }
+.cd-doc-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 860px) { .cd-grid { flex-direction: column; } .cd-aside { width: 100%; } }
+
+/* The editable NEW-hours field reads as a big number, not a boxed input */
+.modal .chg-num-input {
+  background: transparent; border: none; border-bottom: 2px solid currentColor;
+  box-shadow: none; border-radius: 0;
+}
+.modal .chg-num-input:focus { background: transparent; box-shadow: none; border-color: currentColor; }
+.close-x { background: rgba(255, 255, 255, 0.5); }
+
+/* ---------- Tables ---------- */
+thead th { background: rgba(255, 255, 255, 0.42); }
+.list-scroll thead th { background: #eef1f8; }
+tbody tr:hover { background: rgba(255, 255, 255, 0.35); }
+/* Frozen header + columns must be OPAQUE so scrolling rows don't ghost through. */
+.ts .sticky-col { background: #f4f6fb; }
+.ts thead th { background: #e9edf6; }
+.ts thead .sticky-col { background: #e9edf6; }
+.ts-total-col { background: #f4f6fb; }
+.ts thead .ts-total-col { background: #e9edf6; }
+.ts-day.weekend { background: #eef1f7; }
+.ts-cell input:hover { background: rgba(10, 132, 255, 0.12); }
+.ts-cell.filled input { background: rgba(48, 209, 88, 0.14); }
+.ts-cell.over input { background: rgba(255, 69, 58, 0.14); }
+
+/* ---------- Toast ---------- */
+.toast {
+  background: rgba(28, 30, 40, 0.80);
+  color: #fff;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28), var(--glass-hi);
+}
+/* Stacked card toasts (success / error / info) */
+.toast-stack {
+  position: fixed; bottom: 24px; right: 24px; z-index: 70;
+  display: flex; flex-direction: column; gap: 12px;
+  width: min(410px, calc(100vw - 32px)); pointer-events: none;
+}
+.toastc {
+  pointer-events: auto;
+  display: flex; align-items: flex-start; gap: 13px;
+  background: rgba(255, 255, 255, 0.96);
+  -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 18px; padding: 14px 15px;
+  box-shadow: 0 14px 34px rgba(30, 40, 90, 0.2), var(--glass-hi);
+}
+.toastc-ico {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; font-size: 17px; font-weight: 800; line-height: 1;
+}
+.tc-success .toastc-ico { background: #34c759; }
+.tc-error   .toastc-ico { background: #ff3b5c; }
+.tc-info    .toastc-ico { background: #0a84ff; }
+.toastc-body { flex: 1; min-width: 0; }
+.toastc-title { font-weight: 700; font-size: 14.5px; line-height: 1.25; }
+.tc-success .toastc-title { color: #28b14c; }
+.tc-error   .toastc-title { color: #f5224b; }
+.tc-info    .toastc-title { color: #0a84ff; }
+.toastc-msg { color: var(--text-2); font-size: 13.5px; margin-top: 2px; word-break: break-word; line-height: 1.35; }
+.toastc-x {
+  flex: none; background: none; border: none; cursor: pointer;
+  color: var(--text-3); font-size: 13px; padding: 2px 4px; line-height: 1; border-radius: 6px;
+}
+.toastc-x:hover { color: var(--text); background: rgba(0, 0, 0, 0.05); }
+
+.skill-alloc, .chg-diff { background: rgba(255, 255, 255, 0.34); border-color: var(--glass-stroke); }
+
+/* Kanban — translucent columns + glass cards */
+.kcol { background: rgba(255, 255, 255, 0.28); border: 1px solid var(--glass-stroke); box-shadow: var(--glass-hi); }
+.kcol-head { border-bottom: 1px solid var(--border); }
+.kcard { background: rgba(255, 255, 255, 0.62); border: 1px solid var(--glass-stroke); box-shadow: var(--glass-hi), 0 3px 10px rgba(30, 40, 90, 0.1); }
+.kcard:hover { background: rgba(255, 255, 255, 0.8); box-shadow: var(--glass-hi), 0 6px 16px rgba(30, 40, 90, 0.16); }
+.kcard.kc-dragging { background: rgba(255, 255, 255, 0.95); box-shadow: 0 10px 24px rgba(30, 40, 90, 0.22), var(--glass-hi); }
+
+/* No text caret / accidental selection on interactive chrome (inputs stay selectable) */
+.sidebar, .page-head,
+button, label, .gsel-trigger, .gsel-opt, .gsel-val, .chip-opt, .nav-item,
+.pill, .kpi-label, .chg-k, .chg-v, .chg-meta, .grp-chip, .skill-tag, .kcol-head, .kc-ticket {
+  -webkit-user-select: none; user-select: none;
+}
+
+/* App-themed scrollbars: transparent track (blends into rounded panels), slim blue thumb */
+* { scrollbar-width: thin; scrollbar-color: rgba(10, 132, 255, 0.5) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(10, 132, 255, 0.7), rgba(70, 150, 255, 0.7));
+  border-radius: 8px; border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(10, 132, 255, 0.95), rgba(70, 150, 255, 0.95));
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+/* Single selector only — adding pseudo-class variants in one comma list can invalidate
+   the whole rule in some engines and bring the arrow buttons back. */
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+/* Inset the thumb past each rounded container's corner radius so it isn't clipped into
+   a triangle. Plain (non-:vertical) track rules — the :vertical pseudo isn't honored here. */
+.modal::-webkit-scrollbar-track { margin: 24px 0; }
+.list-scroll::-webkit-scrollbar-track,
+.kcol-body::-webkit-scrollbar-track,
+.gsel-menu::-webkit-scrollbar-track,
+.ms-legend::-webkit-scrollbar-track { margin: 18px 0; }
+
+/* Custom dropdown — glass trigger + frosted floating menu */
+.gsel-trigger {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-hi), 0 4px 14px rgba(30, 40, 90, 0.14);
+}
+.gsel-trigger:hover, .gsel-trigger.open {
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: var(--glass-hi), 0 6px 18px rgba(30, 40, 90, 0.2);
+}
+.gsel-menu {
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: saturate(180%) blur(30px);
+  backdrop-filter: saturate(180%) blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 18px 50px rgba(30, 40, 90, 0.24), var(--glass-hi);
+}
+
+/* ============================================================
+   Dark mode toggle + Liquid Glass dark theme
+   ============================================================ */
+.theme-toggle {
+  position: fixed; top: 16px; right: 18px; z-index: 45;
+  width: 38px; height: 38px; border-radius: 50%;
+  border: 1px solid var(--glass-stroke); background: var(--glass-strong);
+  -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: var(--glass-hi), 0 6px 18px rgba(30, 40, 90, 0.18);
+  cursor: pointer; font-size: 17px; color: var(--text); display: grid; place-items: center;
+  transition: background .18s, transform .18s;
+}
+.theme-toggle:hover { background: var(--glass); transform: scale(1.06); }
+
+:root[data-theme="dark"] {
+  --bg: #0c0d11;
+  --surface: rgba(30, 33, 42, 0.72);
+  --surface-solid: #1b1d24;
+  --surface-2: #16181e;
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #f2f3f5;
+  --text-2: #b9bbc2;
+  --text-3: #8b8d95;
+  --accent: #0a84ff; --accent-hover: #409cff; --accent-soft: rgba(10, 132, 255, 0.22);
+  --green: #30d158; --green-soft: rgba(48, 209, 88, 0.18);
+  --amber: #ff9f0a; --amber-soft: rgba(255, 159, 10, 0.18);
+  --red: #ff453a; --red-soft: rgba(255, 69, 58, 0.18);
+  --purple: #bf5af2; --purple-soft: rgba(191, 90, 242, 0.2);
+  --gray-soft: rgba(255, 255, 255, 0.1);
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 30px rgba(0,0,0,.5);
+  --shadow-lg: 0 12px 44px rgba(0,0,0,.6);
+  --glass: rgba(255, 255, 255, 0.07);
+  --glass-strong: rgba(255, 255, 255, 0.1);
+  --glass-soft: rgba(255, 255, 255, 0.05);
+  --glass-stroke: rgba(255, 255, 255, 0.14);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+:root[data-theme="dark"] body { background: #0c0d11; }
+
+:root[data-theme="dark"] .sidebar { background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)); }
+:root[data-theme="dark"] .nav-item:hover:not(.active) { background: rgba(255,255,255,0.08); }
+:root[data-theme="dark"] .card { background: linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.035)); }
+:root[data-theme="dark"] .btn-ghost { background: rgba(255,255,255,0.09); }
+:root[data-theme="dark"] .btn-ghost:hover { background: rgba(255,255,255,0.15); }
+:root[data-theme="dark"] .search,
+:root[data-theme="dark"] input, :root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select.filter, :root[data-theme="dark"] .form-select { background: rgba(255,255,255,0.06); color: var(--text); }
+:root[data-theme="dark"] .search { background: rgba(255,255,255,0.08); }
+:root[data-theme="dark"] .search:hover { background: rgba(255,255,255,0.12); }
+:root[data-theme="dark"] .search:focus,
+:root[data-theme="dark"] input:focus, :root[data-theme="dark"] textarea:focus { background: rgba(255,255,255,0.14); }
+:root[data-theme="dark"] .chip-opt { background: rgba(255,255,255,0.07); }
+/* Selected chip must stay fully blue in dark mode — the generic dark .chip-opt
+   rule above is more specific than .chip-opt.on and was overriding its fill. */
+:root[data-theme="dark"] .chip-opt.on,
+:root[data-theme="dark"] .modal .chip-opt.on {
+  background: linear-gradient(135deg, rgba(10,132,255,0.95), rgba(70,150,255,0.95));
+  border-color: transparent; color: #fff;
+}
+:root[data-theme="dark"] .overlay-blur { background: rgba(0,0,0,0.55); }
+:root[data-theme="dark"] .modal { background: linear-gradient(135deg, rgba(34,37,46,0.98), rgba(26,28,35,0.96)); border-color: rgba(255,255,255,0.12); }
+:root[data-theme="dark"] .modal input, :root[data-theme="dark"] .modal textarea,
+:root[data-theme="dark"] .modal .form-select, :root[data-theme="dark"] .modal .search { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.14); color: var(--text); }
+:root[data-theme="dark"] .modal .chip-opt:not(.on) { background: rgba(255,255,255,0.08); }
+:root[data-theme="dark"] .close-x { background: rgba(255,255,255,0.1); }
+:root[data-theme="dark"] thead th { background: rgba(255,255,255,0.05); }
+:root[data-theme="dark"] .list-scroll thead th { background: #1b1d24; }
+:root[data-theme="dark"] tbody tr:hover { background: rgba(255,255,255,0.05); }
+:root[data-theme="dark"] .ts .sticky-col { background: #16181e; }
+:root[data-theme="dark"] .ts thead th { background: #1b1d24; }
+:root[data-theme="dark"] .ts thead .sticky-col { background: #1b1d24; }
+:root[data-theme="dark"] .ts-total-col { background: #16181e; }
+:root[data-theme="dark"] .ts thead .ts-total-col { background: #1b1d24; }
+:root[data-theme="dark"] .ts-day.weekend { background: rgba(255,255,255,0.03); }
+:root[data-theme="dark"] .toast { background: rgba(20,22,28,0.9); }
+:root[data-theme="dark"] .toastc { background: rgba(28,30,38,0.97); }
+:root[data-theme="dark"] .skill-alloc, :root[data-theme="dark"] .chg-diff { background: rgba(255,255,255,0.05); }
+:root[data-theme="dark"] .kcol { background: rgba(255,255,255,0.04); }
+:root[data-theme="dark"] .kcard { background: rgba(255,255,255,0.08); }
+:root[data-theme="dark"] .kcard:hover { background: rgba(255,255,255,0.13); }
+:root[data-theme="dark"] .kcard.kc-dragging { background: rgba(40,43,52,0.98); }
+:root[data-theme="dark"] .gsel-trigger { background: rgba(255,255,255,0.08); }
+:root[data-theme="dark"] .gsel-trigger:hover, :root[data-theme="dark"] .gsel-trigger.open { background: rgba(255,255,255,0.13); }
+:root[data-theme="dark"] .gsel-menu { background: rgba(26,28,35,0.97); border-color: rgba(255,255,255,0.14); }
+:root[data-theme="dark"] .cd-aside { background: rgba(255,255,255,0.05); }
+:root[data-theme="dark"] .cal-tbl td.cal-td { background: rgba(255,255,255,0.05); }
+:root[data-theme="dark"] .cal-tbl td.cal-td.empty { background: transparent; }
+:root[data-theme="dark"] .cal-tbl td.cal-td.has { color: #7ee2a8; }
+:root[data-theme="dark"] .cal-nav { background: rgba(255,255,255,0.08); }
+:root[data-theme="dark"] .cal-nav:hover { background: rgba(255,255,255,0.14); color: var(--text); }
+/* OFF-state toggle track: visible light pill on dark so the switch shape reads clearly.
+   ON state is blue (needs higher specificity than the OFF override above). */
+:root[data-theme="dark"] .switch-row input[type="checkbox"] { background: rgba(255,255,255,0.24); }
+:root[data-theme="dark"] .switch-row input[type="checkbox"]:checked { background: var(--accent); }
+:root[data-theme="dark"] .switch-row input[type="checkbox"]::after { background: #f5f6f8; }

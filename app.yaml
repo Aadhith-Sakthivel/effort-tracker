@@ -1,14 +1,31 @@
-# Databricks Apps configuration.
-# Add a Lakebase database as an app resource; Databricks then injects PGHOST, PGPORT, PGDATABASE,
-# PGUSER and PGSSLMODE, and the app mints its database password from its service principal.
-command: ['node', 'server.js']
+# Databricks App spec (lives at the app source root).
+# Databricks installs requirements.txt (at this root), then runs this command.
+# The app must listen on the port Databricks provides in $DATABRICKS_APP_PORT.
+# We cd into backend so the `app` package imports, and serve the built React SPA
+# from frontend/dist (which must be present — build it before syncing).
+command:
+  - "python"
+  - "app_run.py"
 
 env:
-  - name: SEED_DEMO          # set to 'true' only for a demo workspace
-    value: 'false'
-  - name: DEV_LOGIN          # the "Sign in as" picker is for local use only
-    value: 'false'
-  - name: BUSINESS_TZ
-    value: 'Asia/Kolkata'
-  - name: LEAD_LOGINS        # comma-separated emails that become leads on first sign-in
-    value: 'you@example.com'
+  # Create all tables on first boot if they don't exist yet (dev convenience;
+  # prod schema is owned by Alembic — see DEVELOPMENT.md).
+  - name: "AUTO_INIT_DB"
+    value: "1"
+  # Bootstrap admins — always get the full-edit (lead) role, even before any
+  # resource emails are set. Comma-separated. Leads are otherwise resolved by
+  # matching the SSO email to an active is_lead resource's email.
+  - name: "ADMIN_EMAILS"
+    value: "you@example.com"   # replaced at deploy time from the ADMIN_EMAILS secret
+  # Postgres schema the app owns (the app role can't create tables in "public").
+  - name: "PGSCHEMA"
+    value: "effort_tracker_demo"
+  # Retired schema from an earlier demo seed; dropped on startup if present.
+  - name: "DROP_SCHEMAS"
+    value: "effort_tracker_app"
+  # Load the fictional demo data on first boot when the database is empty.
+  - name: "SEED_DEMO"
+    value: "1"
+  # The Lakebase Database Resource binding injects PGHOST/PGPORT/PGDATABASE/PGUSER/
+  # PGSSLMODE. No PGPASSWORD is injected — the app uses its service-principal OAuth
+  # token as the Postgres password (see backend/app/lakebase.py).

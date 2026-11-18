@@ -1,0 +1,704 @@
+import React, { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { api, statusClass } from "../api";
+
+// Resolve a group code to its display label (global groups + an enhancement's own custom groups).
+const grpLabelOf = (code, lookups, customItems) =>
+  (lookups?.grp || []).find((x) => x.code === code)?.label
+  || (customItems || []).find((x) => x.code === code)?.label
+  || code;
+
+const fmtDue = (iso) => {
+  try { return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); }
+  catch { return iso; }
+};
+
+// Build a SOLID clone of the card to use as the drag image, so a crisp opaque card
+// follows the cursor (instead of the browser's faint translucent ghost).
+function solidDragImage(ev) {
+  const node = ev.currentTarget;
+  const clone = node.cloneNode(true);
+  Object.assign(clone.style, {
+    position: "fixed", top: "-1000px", left: "-1000px", width: `${node.offsetWidth}px`,
+    opacity: "1", background: "#fff", borderRadius: "14px", margin: "0",
+    boxShadow: "0 14px 30px rgba(30,40,90,.30)", transform: "rotate(-1.5deg)", pointerEvents: "none",
+  });
+  document.body.appendChild(clone);
+  try { ev.dataTransfer.setDragImage(clone, 24, 22); } catch { /* older browsers */ }
+  setTimeout(() => clone.remove(), 0);
+}
+import { Empty, GlassSelect, Modal, Pill, Spinner, fmtHrs } from "../components/ui";
+import { Avatars, fmtET } from "../components/format";
+
+// Doughnut of logged time vs approved budget for one enhancement.
+function HoursDonut({ actual, approved }) {
+  const a = Math.max(Number(actual) || 0, 0);
+  const ap = Math.max(Number(approved) || 0, 0);
+  let data, center, caption, centerColor;
+  if (ap > 0) {
+    const over = Math.max(a - ap, 0);
+    const util = Math.round((a / ap) * 100);
+    data = over > 0
+      ? [{ k: "Approved", value: ap, fill: "#0a84ff" }, { k: "Over", value: over, fill: "#ff453a" }]
+      : [{ k: "Used", value: a, fill: "#0a84ff" }, { k: "Left", value: ap - a, fill: "#e5e7eb" }];
+    center = `${util}%`;
+    centerColor = over > 0 ? "#ff453a" : "var(--text)";
+    caption = `${fmtHrs(a)} of ${fmtHrs(ap)}h${over > 0 ? " · over budget" : " used"}`;
+  } else {
+    data = [{ k: "Logged", value: a || 1, fill: a ? "#0a84ff" : "#e5e7eb" }];
+    center = `${fmtHrs(a)}`;
+    centerColor = "var(--text)";
+    caption = a ? "logged · no approved budget" : "no hours logged";
+  }
+  return (
+    <div>
+      <div style={{ position: "relative", height: 150 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={data} dataKey="value" nameKey="k" cx="50%" cy="50%" innerRadius={48} outerRadius={66}
+                 paddingAngle={data.length > 1 ? 2 : 0} stroke="none" isAnimationActive={false}>
+              {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: centerColor }}>{center}</div>
+        </div>
+      </div>
+      <div className="muted" style={{ fontSize: 12.5, textAlign: "center", marginTop: 4 }}>{caption}</div>
+    </div>
+  );
+}
+
+// Month calendar heatmap: hours logged per day for one enhancement.
+function MiniCalendar({ efforts }) {
+  const hoursByDate = {};
+  (efforts || []).forEach((e) => { if (e.hours) hoursByDate[e.work_date] = (hoursByDate[e.work_date] || 0) + Number(e.hours); });
+  const dates = Object.keys(hoursByDate).sort();
+  const latest = dates.length ? dates[dates.length - 1] : null;
+  const [ym, setYm] = useState(() => {
+    const b = latest ? new Date(latest + "T00:00:00") : new Date();
+    return { y: b.getFullYear(), m: b.getMonth() };
+  });
+  const shift = (d) => setYm(({ y, m }) => { const nd = new Date(y, m + d, 1); return { y: nd.getFullYear(), m: nd.getMonth() }; });
+
+  const first = new Date(ym.y, ym.m, 1);
+  const startDow = first.getDay();
+  const dim = new Date(ym.y, ym.m + 1, 0).getDate();
+  const label = first.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const iso = (d) => `${ym.y}-${String(ym.m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  let maxH = 1, total = 0;
+  for (let d = 1; d <= dim; d++) { const h = hoursByDate[iso(d)] || 0; total += h; if (h > maxH) maxH = h; }
+
+  // Build fixed week rows so layout is deterministic (no stretched grid rows).
+  const weeks = [];
+  let wk = [];
+  for (let i = 0; i < startDow; i++) wk.push(null);
+  for (let d = 1; d <= dim; d++) { wk.push(d); if (wk.length === 7) { weeks.push(wk); wk = []; } }
+  if (wk.length) { while (wk.length < 7) wk.push(null); weeks.push(wk); }
+
+  const cell = (d, i) => {
+    if (!d) return <td key={i} className="cal-td empty" />;
+    const h = hoursByDate[iso(d)] || 0;
+    const alpha = h ? 0.18 + 0.62 * (h / maxH) : 0;
+    return (
+      <td key={i} className={`cal-td ${h ? "has" : ""}`}
+        style={h ? { background: `rgba(48,164,108,${alpha})` } : undefined}
+        title={h ? `${iso(d)} · ${fmtHrs(h)}h` : iso(d)}>
+        <div className="cal-d">{d}</div>
+        {h ? <div className="cal-h">{fmtHrs(h)}</div> : null}
+      </td>
+    );
+  };
+
+  return (
+    <div className="cal">
+      <div className="cal-head">
+        <button className="cal-nav" onClick={() => shift(-1)} aria-label="Previous month">‹</button>
+        <span className="cal-label">{label}</span>
+        <button className="cal-nav" onClick={() => shift(1)} aria-label="Next month">›</button>
+      </div>
+      <table className="cal-tbl">
+        <thead>
+          <tr>{["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <th key={i}>{d}</th>)}</tr>
+        </thead>
+        <tbody>
+          {weeks.map((w, wi) => <tr key={wi}>{w.map((d, i) => cell(d, i))}</tr>)}
+        </tbody>
+      </table>
+      <div className="cal-foot muted">{total ? `${fmtHrs(total)}h logged this month` : "No hours this month"}</div>
+    </div>
+  );
+}
+
+// --- Card detail + comments + activity ---------------------------------
+function CardDetail({ enh, lookups, toast, canEdit = false, onClose, onChanged }) {
+  const [full, setFull] = useState(enh);
+  const [activity, setActivity] = useState(null);
+  const [notes, setNotes] = useState(null);
+  const [efforts, setEfforts] = useState(null);
+  const [comment, setComment] = useState("");   // fresh note to add — not prefilled
+  const [groupDetail, setGroupDetail] = useState(null);   // { groups: [{code,label,sub_status_code,thread}] }
+  const [activeTab, setActiveTab] = useState("");
+  const [tabComment, setTabComment] = useState("");
+  const [tabBusy, setTabBusy] = useState(false);
+  const [addingCard, setAddingCard] = useState(false);   // card-level comment input hidden until asked
+  const [addingGroup, setAddingGroup] = useState(false);  // per-group comment input hidden until asked
+  const [addingLink, setAddingLink] = useState(false);
+  const [linkName, setLinkName] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [subStatus, setSubStatus] = useState(enh.sub_status_code || "");
+  const [docUrl, setDocUrl] = useState(enh.doc_url || "");
+  const [editDoc, setEditDoc] = useState(false);
+  const [savingDoc, setSavingDoc] = useState(false);
+  const [chg, setChg] = useState(enh.change_ticket || "");
+  const [editChg, setEditChg] = useState(false);
+  const [savingChg, setSavingChg] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const loadActivity = () =>
+    api.audit({ entity_type: "enhancement", entity_id: enh.id, limit: 100 }).then(setActivity);
+  const loadGroups = () =>
+    api.enhancementGroupDetail(enh.id).then((d) => {
+      setGroupDetail(d);
+      setActiveTab((t) => (t && d.groups.some((g) => g.code === t) ? t : (d.groups[0]?.code ?? "")));
+    });
+
+  useEffect(() => {
+    api.enhancement(enh.id).then((e) => { setFull(e); setSubStatus(e.sub_status_code || ""); setDocUrl(e.doc_url || ""); setChg(e.change_ticket || ""); });
+    loadActivity();
+    loadGroups();
+    api.efforts({ enhancement_id: enh.id }).then((e) => {
+      setEfforts(e);
+      setNotes(e.filter((x) => x.note && x.note !== "migrated from Excel")
+                .sort((a, b) => (a.work_date < b.work_date ? 1 : -1)));
+    });
+  }, [enh.id]);
+
+  // Card-level comment: broadcasts to every group tab (grp_code = null).
+  const saveComment = async () => {
+    const text = comment.trim();
+    if (!text) return;
+    setSaving(true);
+    try {
+      const d = await api.addEnhancementComment(enh.id, null, text);
+      setGroupDetail(d);
+      setFull((f) => ({ ...f, comments: (f.comments ? f.comments + "\n" : "") + text }));
+      setComment(""); setAddingCard(false);
+      loadActivity();
+      toast("Comment added to all groups");
+      onChanged?.();
+    } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
+  };
+
+  // Group-specific comment: only that group's tab.
+  const addGroupComment = async (code) => {
+    const text = tabComment.trim();
+    if (!text) return;
+    setTabBusy(true);
+    try {
+      const d = await api.addEnhancementComment(enh.id, code, text);
+      setGroupDetail(d); setTabComment(""); setAddingGroup(false); toast("Comment added");
+    } catch (e) { toast(e.message, "error"); } finally { setTabBusy(false); }
+  };
+
+  // Per-group sub-status (overall enhancement status/sub-status is unchanged).
+  const saveGroupSubStatus = async (code, val) => {
+    try { setGroupDetail(await api.setEnhancementGroupSubStatus(enh.id, code, val || null)); toast("Sub-status updated"); }
+    catch (e) { toast(e.message, "error"); }
+  };
+
+  // Members may change sub-status (and status via drag) even though they can't edit the
+  // Enhancement page — the backend allows status_code/sub_status_code/comments for members.
+  const addLink = async () => {
+    const n = linkName.trim(), u = linkUrl.trim();
+    if (!n || !u) return;
+    try { const e = await api.addEnhancementLink(enh.id, n, u); setFull(e); setLinkName(""); setLinkUrl(""); setAddingLink(false); toast("Link added"); }
+    catch (err) { toast(err.message, "error"); }
+  };
+  const removeLink = async (lid) => {
+    try { const e = await api.deleteEnhancementLink(enh.id, lid); setFull(e); toast("Link removed"); }
+    catch (err) { toast(err.message, "error"); }
+  };
+
+  const saveSubStatus = async (val) => {
+    const prev = subStatus;
+    setSubStatus(val);
+    try {
+      await api.updateEnhancement(enh.id, { sub_status_code: val || null });
+      setFull((f) => ({ ...f, sub_status_code: val || null }));
+      loadActivity();
+      toast("Sub-status updated");
+      onChanged?.();
+    } catch (e) { toast(e.message, "error"); setSubStatus(prev); }
+  };
+
+  const subOptions = [{ value: "", label: "— none —" },
+    ...((lookups?.sub_status) || []).map((s) => ({ value: s.code, label: s.label || s.code }))];
+
+  const saveDoc = async () => {
+    const url = docUrl.trim();
+    setSavingDoc(true);
+    try {
+      await api.updateEnhancement(enh.id, { doc_url: url || null });
+      setFull((f) => ({ ...f, doc_url: url || null }));
+      setEditDoc(false);
+      toast("Documentation link saved");
+      onChanged?.();
+    } catch (e) { toast(e.message, "error"); } finally { setSavingDoc(false); }
+  };
+  const normalizedDoc = (u) => (u && !/^https?:\/\//i.test(u) ? `https://${u}` : u);
+
+  const saveChg = async () => {
+    const v = chg.trim();
+    setSavingChg(true);
+    try {
+      await api.updateEnhancement(enh.id, { change_ticket: v || null });
+      setFull((f) => ({ ...f, change_ticket: v || null }));
+      setEditChg(false);
+      toast("Implementation ticket saved");
+      onChanged?.();
+    } catch (e) { toast(e.message, "error"); } finally { setSavingChg(false); }
+  };
+  // A full URL is used as-is; a bare ticket number (e.g. CHG2210913) becomes a ServiceNow link.
+  const ticketLink = (v) => {
+    const s = (v || "").trim();
+    if (!s) return null;
+    if (/^https?:\/\//i.test(s)) return s;
+    const inner = `change_request.do?sysparm_query=number=${s}`;
+    return `https://your-instance.service-now.com/now/nav/ui/classic/params/target/${encodeURIComponent(inner)}`;
+  };
+
+  const tsVal = (s) => (s && s.length <= 10 ? new Date(s + "T00:00:00")
+    : new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(s || "") ? s : s + "Z"));
+  // Comments are stored as an appended log, so each audit row's new_value contains the
+  // whole blob — show only the line(s) added since the previous value.
+  const addedLine = (a) => {
+    const ov = a.old_value || "", nv = a.new_value || "";
+    return (nv.startsWith(ov) ? nv.slice(ov.length) : nv).replace(/^\n+/, "").trim();
+  };
+  // Unified notes feed: enhancement comments + timesheet notes, newest first.
+  const notesFeed = [
+    ...(activity || []).filter((a) => a.field === "comments")
+      .map((a) => ({ kind: "comment", text: addedLine(a), who: a.changed_by, ts: a.changed_at }))
+      .filter((n) => n.text),
+    ...(notes || []).map((n) => ({ kind: "timesheet", text: n.note, who: n.resource_name, ts: n.work_date, hours: n.hours })),
+  ].sort((a, b) => tsVal(b.ts) - tsVal(a.ts));
+  const changes = (activity || []).filter((a) => a.field !== "comments");
+  const loading = activity === null || notes === null;
+
+  // Shared renderer for the Documentation / Implementation-ticket link fields.
+  const linkField = ({ label, value, href, openText, editing, setEditing, draft, setDraft, save, saving, placeholder }) => (
+    <div className="cd-link-col">
+      <div className="kpi-label" style={{ marginBottom: 6 }}>{label}</div>
+      {value && !editing && (
+        <a href={href} target="_blank" rel="noreferrer" className="cd-doc-link">
+          <span>🔗</span><span className="cd-doc-text">{openText}</span><span>↗</span>
+        </a>
+      )}
+      {canEdit ? (editing ? (
+        <div className="field" style={{ marginTop: value ? 8 : 0 }}>
+          <input value={draft} autoFocus placeholder={placeholder}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !saving) save(); if (e.key === "Escape") { setEditing(false); setDraft(value || ""); } }} />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setDraft(value || ""); }} disabled={saving}>Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={save} disabled={saving || draft.trim() === (value || "")}>{saving ? "Saving…" : "Save"}</button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn btn-ghost btn-sm" style={{ marginTop: value ? 8 : 0 }}
+          onClick={() => { setDraft(value || ""); setEditing(true); }}>
+          {value ? "Edit link" : "+ Add link"}
+        </button>
+      )) : (!value && <div className="muted" style={{ fontSize: 13 }}>—</div>)}
+    </div>
+  );
+
+  const usedPct = full.approved_hrs ? Math.min(100, Math.round((full.actual_hrs / full.approved_hrs) * 100)) : 0;
+  const hoursOver = full.approved_hrs != null && full.actual_hrs > full.approved_hrs;
+
+  return (
+    <div className="detail-page page-fade">
+      <div className="detail-head">
+        <button className="detail-back" onClick={onClose}>‹ Board</button>
+        <div className="detail-titlerow">
+          <div style={{ minWidth: 0 }}>
+            <h1 className="detail-title">{full.title}</h1>
+            <div className="detail-meta"><span className="detail-ticket">{full.ticket}</span> <Pill value={full.status_code} /></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-grid">
+        <div className="detail-main">
+          <div className="card" style={{ padding: "20px 22px" }}>
+
+      <div className="cd-top">
+        <div className="chg-meta">
+          <div><span className="chg-k">Sub-status</span><span className="chg-v">
+            {canEdit ? <GlassSelect value={subStatus} onChange={saveSubStatus} minWidth={190} options={subOptions} /> : (full.sub_status_code || "—")}
+          </span></div>
+          <div><span className="chg-k">Groups</span><span className="chg-v">{(full.groups || []).length ? <span className="grp-chips">{full.groups.map((g) => <span key={g} className="grp-chip">{grpLabelOf(g, lookups, full.custom_group_items)}</span>)}</span> : "—"}</span></div>
+          <div><span className="chg-k">Owner</span><span className="chg-v">{full.lead_name || full.smoc_lead || "—"}</span></div>
+          <div><span className="chg-k">Team</span><span className="chg-v">{full.resources && full.resources.length ? <Avatars people={full.resources} max={6} size={24} /> : "—"}</span></div>
+          <div><span className="chg-k">Hours</span><span className="chg-v">{fmtHrs(full.actual_hrs)} actual · {fmtHrs(full.approved_hrs)} approved · {fmtHrs(full.remaining_hrs)} remaining</span></div>
+          <div><span className="chg-k">Target</span><span className="chg-v">{full.eta || "—"}</span></div>
+        </div>
+        <div className="cd-links">
+          {linkField({
+            label: "Documentation", value: full.doc_url, href: normalizedDoc(full.doc_url),
+            openText: "Open documentation", editing: editDoc, setEditing: setEditDoc,
+            draft: docUrl, setDraft: setDocUrl, save: saveDoc, saving: savingDoc,
+            placeholder: "https://… (Confluence, SharePoint)",
+          })}
+          {linkField({
+            label: "Implementation ticket", value: full.change_ticket, href: ticketLink(full.change_ticket),
+            openText: full.change_ticket && !/^https?:\/\//i.test(full.change_ticket) ? full.change_ticket : "Open ticket",
+            editing: editChg, setEditing: setEditChg, draft: chg, setDraft: setChg, save: saveChg, saving: savingChg,
+            placeholder: "CHG number or URL",
+          })}
+          <div className="cd-link-col">
+            <div className="kpi-label" style={{ marginBottom: 6 }}>Other documentation</div>
+            {(full.links || []).length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                {full.links.map((l) => (
+                  <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <a href={normalizedDoc(l.url)} target="_blank" rel="noreferrer" className="cd-doc-link">
+                      <span>🔗</span><span className="cd-doc-text">{l.name}</span><span>↗</span>
+                    </a>
+                    {canEdit && <button className="btn btn-ghost btn-sm" onClick={() => removeLink(l.id)} title="Remove link" style={{ padding: "2px 8px" }}>×</button>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {canEdit && (addingLink ? (
+              <div className="field" style={{ marginTop: 0 }}>
+                <input autoFocus placeholder="Link name (e.g. Design doc)" value={linkName} onChange={(e) => setLinkName(e.target.value)} style={{ marginBottom: 6 }} />
+                <input placeholder="https://…" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") addLink(); if (e.key === "Escape") { setAddingLink(false); setLinkName(""); setLinkUrl(""); } }} />
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => { setAddingLink(false); setLinkName(""); setLinkUrl(""); }}>Cancel</button>
+                  <button className="btn btn-primary btn-sm" onClick={addLink} disabled={!linkName.trim() || !linkUrl.trim()}>Add</button>
+                </div>
+              </div>
+            ) : (
+              <button className="btn btn-ghost btn-sm" onClick={() => setAddingLink(true)}>+ Add link</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="cd-sep" />
+
+      {/* Card-level comment — broadcasts to every group tab. Collapsed until asked. */}
+      {canEdit && (
+        <div className="field" style={{ marginBottom: 14 }}>
+          {!addingCard ? (
+            <button className="btn btn-ghost btn-sm" onClick={() => setAddingCard(true)}>+ Add status to all groups</button>
+          ) : (
+            <>
+              <label>Comment / current status <span className="muted" style={{ fontWeight: 400 }}>— added to every group</span></label>
+              <textarea autoFocus value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a status note to all groups…" />
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 10 }}>
+                <button className="btn btn-ghost" onClick={() => { setAddingCard(false); setComment(""); }}>Cancel</button>
+                <button className="btn btn-primary" onClick={saveComment} disabled={saving || !comment.trim()}>{saving ? "Saving…" : "Save comment"}</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Per-group tabs: each group's own sub-status + comment thread */}
+      {groupDetail === null ? <div className="muted" style={{ fontSize: 13 }}>Loading groups…</div>
+        : groupDetail.groups.length === 0 ? (
+          <div className="muted" style={{ fontSize: 13 }}>No groups on this enhancement — add a group to track per-group status &amp; comments.</div>
+        ) : (() => {
+          const g = groupDetail.groups.find((x) => x.code === activeTab) || groupDetail.groups[0];
+          return (
+            <div>
+              <div className="gtabs">
+                {groupDetail.groups.map((x) => (
+                  <button key={x.code} type="button" className={`gtab ${g && x.code === g.code ? "on" : ""}`}
+                    onClick={() => { setActiveTab(x.code); setAddingGroup(false); setTabComment(""); }}>{x.label}</button>
+                ))}
+              </div>
+              {g && (
+                <div className="gtab-body">
+                  <div className="chg-meta" style={{ marginBottom: 12 }}>
+                    <div><span className="chg-k">Sub-status</span><span className="chg-v">
+                      {canEdit
+                        ? <GlassSelect value={g.sub_status_code || ""} onChange={(v) => saveGroupSubStatus(g.code, v)} minWidth={190} options={subOptions} />
+                        : (g.sub_status_code || "—")}
+                    </span></div>
+                  </div>
+                  {canEdit && (
+                    !addingGroup ? (
+                      <div style={{ marginBottom: 10 }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setAddingGroup(true)}>+ Add comment</button>
+                      </div>
+                    ) : (
+                      <div className="field" style={{ marginBottom: 10 }}>
+                        <textarea autoFocus value={tabComment} onChange={(e) => setTabComment(e.target.value)} placeholder={`Add a comment to “${g.label}” only…`} />
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => { setAddingGroup(false); setTabComment(""); }}>Cancel</button>
+                          <button className="btn btn-primary btn-sm" onClick={() => addGroupComment(g.code)} disabled={tabBusy || !tabComment.trim()}>{tabBusy ? "Saving…" : "Add comment"}</button>
+                        </div>
+                      </div>
+                    )
+                  )}
+                  {g.thread.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>No comments for this group yet.</div>
+                    : <div className="timeline">{g.thread.map((n, i) => (
+                        <div className="tl-item" key={i}>
+                          <span className={`tl-dot ${n.source === "timesheet" ? "green" : n.source === "status" ? "amber" : n.source === "group" ? "purple" : "blue"}`} />
+                          <div>
+                            <div className="tl-text">
+                              <span className={`lc-tag ${n.source === "timesheet" ? "timesheet" : n.source === "status" ? "status" : "comment"}`} style={{ marginRight: 6 }}>{n.source === "status" ? "status" : n.source}</span>{n.body}
+                            </div>
+                            <div className="tl-meta">{n.who || "—"} · {n.source === "timesheet"
+                              ? `${n.ts}${n.hours ? ` · ${fmtHrs(n.hours)}h` : ""}` : `${fmtET(n.ts)} ET`}</div>
+                          </div>
+                        </div>))}</div>}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+          </div>
+        </div>
+
+        <aside className="detail-aside">
+          <div className="card" style={{ padding: "18px 20px" }}>
+            <div className="kpi-label" style={{ marginBottom: 10 }}>Time</div>
+            <HoursDonut actual={full.actual_hrs} approved={full.approved_hrs} />
+            <div className="kpi-label" style={{ margin: "18px 0 6px" }}>Logged by day</div>
+            {efforts ? <MiniCalendar efforts={efforts} /> : <div className="muted" style={{ fontSize: 13 }}>Loading…</div>}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+// --- Move confirmation (from -> to + comment) --------------------------
+function MoveConfirm({ pending, statusLabel, requireTicket, onConfirm, onCancel }) {
+  const { row, to } = pending;
+  const [comment, setComment] = useState("");
+  const [chg, setChg] = useState(row.change_ticket || "");
+  const [busy, setBusy] = useState(false);
+  const ticketOk = !requireTicket || chg.trim().length > 0;
+  const go = async () => {
+    if (!ticketOk) return;
+    setBusy(true);
+    try { await onConfirm(comment, requireTicket ? chg.trim() : undefined); } finally { setBusy(false); }
+  };
+  return (
+    <Modal title={`Move ${row.ticket}`} onClose={onCancel}
+      footer={<><button className="btn btn-ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="btn btn-primary" onClick={go} disabled={busy || !ticketOk}>{busy ? "Moving…" : "Confirm move"}</button></>}>
+      <div style={{ fontSize: 13.5, color: "var(--text-2)", marginBottom: 14 }}>{row.title}</div>
+      <div className="chg-diff" style={{ marginBottom: 14 }}>
+        <div className="chg-box prev"><div className="chg-lab">From</div><div style={{ marginTop: 6 }}><span className={`pill ${statusClass(row.status_code)}`}>{statusLabel(row.status_code)}</span></div></div>
+        <div className="chg-arrow">→</div>
+        <div className="chg-box next"><div className="chg-lab">To</div><div style={{ marginTop: 6 }}><span className={`pill ${statusClass(to)}`}>{statusLabel(to)}</span></div></div>
+      </div>
+      {requireTicket && (
+        <div className="field" style={{ marginBottom: 12 }}>
+          <label>Implementation ticket <span className="muted" style={{ fontWeight: 400 }}>— required to complete; enter <b>NA</b> if none</span></label>
+          <input value={chg} onChange={(e) => setChg(e.target.value)} placeholder="CHG2210913 or NA" autoFocus />
+          {!ticketOk && <div style={{ color: "var(--red)", fontSize: 12, marginTop: 4 }}>Required before moving to Completed.</div>}
+        </div>
+      )}
+      <div className="field">
+        <label>Comment <span className="muted" style={{ fontWeight: 400 }}>— why is it moving? (optional)</span></label>
+        <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="e.g. Handed to vendor for assessment" />
+      </div>
+    </Modal>
+  );
+}
+
+// --- Board -------------------------------------------------------------
+export default function Board({ lookups, resources, toast, canEdit = false }) {
+  const [rows, setRows] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [overCol, setOverCol] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [pending, setPending] = useState(null); // { row, to }
+  const [q, setQ] = useState("");
+  const [grp, setGrp] = useState("");
+  const [person, setPerson] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
+
+  // Don't blank existing rows on refetch (avoids flicker); Spinner only shows on first load.
+  const load = () => { api.enhancements({ active_only: false }).then(setRows); };
+  useEffect(load, []);
+
+  // Edge auto-scroll while dragging a card, so far columns are reachable.
+  const kanbanRef = useRef(null);
+  const speedRef = useRef(0);
+  const rafRef = useRef(0);
+  const startAutoScroll = () => {
+    const step = () => {
+      if (speedRef.current && kanbanRef.current) kanbanRef.current.scrollLeft += speedRef.current;
+      rafRef.current = requestAnimationFrame(step);
+    };
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(step);
+  };
+  const stopAutoScroll = () => { speedRef.current = 0; cancelAnimationFrame(rafRef.current); rafRef.current = 0; };
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+  const onKanbanDragOver = (e) => {
+    const el = kanbanRef.current; if (!el) return;
+    e.preventDefault();
+    const r = el.getBoundingClientRect(), edge = 110, max = 26;
+    if (e.clientX > r.right - edge) speedRef.current = Math.min(max, ((e.clientX - (r.right - edge)) / edge) * max);
+    else if (e.clientX < r.left + edge) speedRef.current = -Math.min(max, (((r.left + edge) - e.clientX) / edge) * max);
+    else speedRef.current = 0;
+  };
+
+  const statusLabel = (c) => (lookups.status.find((s) => s.code === c)?.label) || c || "No status";
+  // Columns = statuses; hide terminal (inactive) columns unless "Show inactive".
+  const columns = showInactive ? lookups.status : lookups.status.filter((s) => !s.is_inactive);
+
+  const filtered = (rows || []).filter((r) => {
+    if (q && !`${r.ticket} ${r.title}`.toLowerCase().includes(q.toLowerCase())) return false;
+    if (grp && !(r.groups || []).includes(grp)) return false;
+    if (person && !((r.resource_ids || []).includes(person) || r.lead_resource_id === person)) return false;
+    return true;
+  });
+  const inCol = (code) => filtered.filter((r) => r.status_code === code);
+  // Orphans = cards whose status matches NO status at all (genuinely statusless).
+  // A card with an inactive status (Completed/Cancelled/Withdrawn) is NOT an orphan —
+  // in active-only view it simply drops off the board until "Show inactive" is on.
+  const orphans = filtered.filter((r) => !lookups.status.some((s) => s.code === r.status_code));
+
+  const requestMove = (id, to) => {
+    const row = rows.find((x) => x.id === id);
+    setDragId(null);
+    stopAutoScroll();
+    if (!canEdit || !row || row.status_code === to) return;
+    setPending({ row, to });
+  };
+
+  const confirmMove = async (comment, changeTicket) => {
+    const { row, to } = pending;
+    const body = { status_code: to };
+    if (changeTicket !== undefined && changeTicket !== (row.change_ticket || "")) body.change_ticket = changeTicket;
+    if (comment && comment.trim()) {
+      const stamp = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const line = `[${stamp} → ${statusLabel(to)}] ${comment.trim()}`;
+      body.comments = (row.comments ? row.comments + "\n" : "") + line;
+    }
+    setRows((prev) => prev.map((x) => (x.id === row.id
+      ? { ...x, status_code: to, change_ticket: body.change_ticket ?? x.change_ticket, comments: body.comments ?? x.comments } : x)));
+    setPending(null);
+    try { await api.updateEnhancement(row.id, body); toast(`${row.ticket}: ${statusLabel(row.status_code)} → ${statusLabel(to)}`); }
+    catch (e) { toast(e.message, "error"); load(); }
+  };
+
+  const todayStr = new Date().toLocaleDateString("en-CA");
+  const inactiveSet = new Set((lookups?.status || []).filter((s) => s.is_inactive).map((s) => s.code));
+  const isOverdue = (e) => e.eta && e.eta < todayStr && !inactiveSet.has(e.status_code);
+
+  const Card = (e) => {
+    const dragging = dragId === e.id;
+    return (
+      <motion.div key={e.id} layout
+        transition={{ type: "spring", stiffness: 520, damping: 40, mass: 0.8 }}
+        className="kcard" draggable={canEdit}
+        // While dragging, the source stays as a reserved empty (dashed) slot — the same
+        // size — so nothing shifts yet. The solid drag image follows the cursor. Only on
+        // drop (status change) does the card leave and the rest spring in to fill.
+        style={dragging ? { background: "rgba(10,132,255,0.06)", borderStyle: "dashed", borderColor: "var(--accent)", boxShadow: "none" } : undefined}
+        onDragStart={canEdit ? (ev) => { solidDragImage(ev); requestAnimationFrame(() => setDragId(e.id)); startAutoScroll(); } : undefined}
+        onDragEnd={canEdit ? () => { setDragId(null); stopAutoScroll(); } : undefined}
+        onClick={() => setDetail(e)}>
+        <div style={{ visibility: dragging ? "hidden" : "visible" }}>
+          <div className="kc-ticket">{e.ticket}</div>
+          <div className="kc-title">{e.title}</div>
+          <div className="kc-foot">
+            <div className="kc-meta">
+              <div className="kc-lead">{e.lead_name || e.smoc_lead || "—"}</div>
+              {e.eta && <div className={`kc-due ${isOverdue(e) ? "overdue" : ""}`}>Due {fmtDue(e.eta)}</div>}
+            </div>
+            {(e.approved_hrs != null || e.actual_hrs) ? (
+              <span className={`kc-hrs ${e.approved_hrs != null && e.actual_hrs > e.approved_hrs ? "warn" : ""}`}>
+                {fmtHrs(e.actual_hrs || 0)}h{e.approved_hrs != null ? ` / ${fmtHrs(e.approved_hrs)}h` : ""}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  // A selected card opens as a full-page detail (replaces the board), not a modal.
+  if (detail) {
+    return <CardDetail enh={detail} lookups={lookups} toast={toast} canEdit={canEdit}
+      onClose={() => setDetail(null)} onChanged={load} />;
+  }
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <div className="page-title">Board</div>
+          <div className="page-sub">Drag a card to change its status. Click to open details, comments &amp; activity.</div>
+        </div>
+        {canEdit && !showInactive && lookups.status.some((s) => s.is_inactive) && (
+          <div className="qm-inline">
+            <span className="qm-label">Drag here to close →</span>
+            {lookups.status.filter((s) => s.is_inactive).map((s) => (
+              <div key={s.code}
+                className={`qm-target ${overCol === "qm:" + s.code ? "over" : ""}`}
+                onDragOver={(e) => { e.preventDefault(); if (overCol !== "qm:" + s.code) setOverCol("qm:" + s.code); }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOverCol(null); }}
+                onDrop={(e) => { e.preventDefault(); setOverCol(null); if (dragId) requestMove(dragId, s.code); }}>
+                <span className={`pill ${statusClass(s.code)}`}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="toolbar">
+        <input className="search" placeholder="Search ticket or title…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <GlassSelect value={grp} onChange={setGrp} minWidth={150}
+          options={[{ value: "", label: "All groups" }, ...lookups.grp.map((g) => ({ value: g.code, label: g.label }))]} />
+        <GlassSelect value={person} onChange={setPerson} minWidth={180}
+          options={[{ value: "", label: "All assignees" }, ...resources.filter((r) => r.active).map((r) => ({ value: r.id, label: r.name }))]} />
+        <label className="switch-row" style={{ fontSize: 13.5, whiteSpace: "nowrap" }}>
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Show inactive
+        </label>
+      </div>
+
+      {!rows ? <Spinner /> : (
+        <div className="kanban" ref={kanbanRef} onDragOver={onKanbanDragOver}>
+          {orphans.length > 0 && (
+            <div className="kcol">
+              <div className="kcol-head"><span className="kcol-name muted">No status</span><span className="kcol-count">{orphans.length}</span></div>
+              <div className="kcol-body">{orphans.map(Card)}</div>
+            </div>
+          )}
+          {columns.map((c) => (
+            <div key={c.code}
+              className={`kcol ${overCol === c.code ? "over" : ""}`}
+              onDragOver={(ev) => { ev.preventDefault(); if (overCol !== c.code) setOverCol(c.code); }}
+              onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setOverCol(null); }}
+              onDrop={(ev) => { ev.preventDefault(); setOverCol(null); if (dragId) requestMove(dragId, c.code); }}>
+              <div className="kcol-head">
+                <span className={`pill ${statusClass(c.code)}`}>{c.label}</span>
+                <span className="kcol-count">{inCol(c.code).length}</span>
+              </div>
+              <div className="kcol-body">
+                {inCol(c.code).length === 0 ? <div className="kcol-empty">Drop here</div> : inCol(c.code).map(Card)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pending && <MoveConfirm pending={pending} statusLabel={statusLabel} requireTicket={pending.to === "Completed"} onConfirm={confirmMove} onCancel={() => setPending(null)} />}
+    </>
+  );
+}

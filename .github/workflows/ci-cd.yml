@@ -1,0 +1,96 @@
+# CI on every push and pull request; deploy to Databricks Apps on pushes to main.
+#
+# Deploy needs these repository secrets (Settings → Secrets and variables → Actions):
+#   DATABRICKS_HOST    https://<your-workspace>.cloud.databricks.com
+#   DATABRICKS_TOKEN   a personal access token (User settings → Developer → Access tokens)
+#   ADMIN_EMAILS       login(s) that always get the lead role, comma-separated
+# Without them the deploy job is skipped and CI still runs.
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_NAME: effort-tracker
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt pytest httpx
+      - run: python -m pytest
+        working-directory: backend
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  deploy:
+    needs: [backend-tests, frontend-build]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
+    steps:
+      - name: Check deploy secrets
+        id: secrets
+        run: |
+          if [ -n "$DATABRICKS_HOST" ] && [ -n "$DATABRICKS_TOKEN" ] && [ -n "$ADMIN_EMAILS" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Deploy skipped: set DATABRICKS_HOST, DATABRICKS_TOKEN and ADMIN_EMAILS secrets to enable it."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
+      - uses: actions/download-artifact@v4
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Assemble app bundle
+        if: steps.secrets.outputs.ready == 'true'
+        run: python scripts/build_bundle.py
+      - uses: databricks/setup-cli@main
+        if: steps.secrets.outputs.ready == 'true'
+      - name: Upload and deploy
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          me=$(databricks current-user me --output json | jq -r .userName)
+          src="/Workspace/Users/$me/$APP_NAME"
+          databricks workspace import-dir build/app "$src" --overwrite
+          databricks apps deploy "$APP_NAME" --source-code-path "$src"
+      - name: Smoke-check the app
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          databricks apps get "$APP_NAME" --output json \
+            | jq -e '.app_status.state == "RUNNING" and .active_deployment.status.state == "SUCCEEDED"'

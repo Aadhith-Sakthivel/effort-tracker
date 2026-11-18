@@ -1,0 +1,12 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Effort Tracker">
+  <defs>
+    <linearGradient id="etg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6d8bff"/>
+      <stop offset="1" stop-color="#4a3bd6"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#etg)"/>
+  <rect x="16" y="34" width="8" height="16" rx="3" fill="#ffffff" fill-opacity="0.95"/>
+  <rect x="28" y="26" width="8" height="24" rx="3" fill="#ffffff" fill-opacity="0.95"/>
+  <rect x="40" y="16" width="8" height="34" rx="3" fill="#ffffff" fill-opacity="0.95"/>
+</svg>

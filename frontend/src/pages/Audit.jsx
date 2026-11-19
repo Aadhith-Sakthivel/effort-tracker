@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
-import { Empty, GlassSelect, Pill, Spinner } from "../components/ui";
+import { Empty, GlassSelect, LoadError, Pill, Spinner } from "../components/ui";
 import { fmtET } from "../components/format";
 
 const actionKind = { create: "pill-green", update: "pill-blue", delete: "pill-red" };
@@ -12,17 +12,21 @@ export default function Audit() {
   const [showInactive, setShowInactive] = useState(false);
   const [enh, setEnh] = useState([]);
   const [resources, setResources] = useState([]);
+  const [err, setErr] = useState(null);
 
   // Lists for the dependent "specific entity" filter.
   useEffect(() => {
-    api.enhancements({ active_only: false }).then(setEnh);
-    api.resources().then(setResources);
+    api.enhancements({ active_only: false }).then(setEnh).catch(() => {});
+    api.resources().then(setResources).catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const loadRows = () => {
+    setErr(null);
     // Keep rows during refetch (no flicker); Spinner only on first load.
-    api.audit({ entity_type: type || undefined, entity_id: entityId || undefined, limit: 300 }).then(setRows);
-  }, [type, entityId]);
+    api.audit({ entity_type: type || undefined, entity_id: entityId || undefined, limit: 300 })
+      .then(setRows).catch(setErr);
+  };
+  useEffect(() => { loadRows(); }, [type, entityId]);
 
   // When the entity type changes, reset the specific-entity selection.
   const changeType = (t) => { setType(t); setEntityId(""); };
@@ -58,6 +62,10 @@ export default function Audit() {
             { value: "effort", label: "Time entries" },
             { value: "support_ticket", label: "Support tickets" },
             { value: "resource", label: "Resources" },
+            { value: "group", label: "Groups" },
+            { value: "status", label: "Statuses" },
+            { value: "sub_status", label: "Sub-statuses" },
+            { value: "setting", label: "Settings" },
           ]} />
         {entityOptions && (
           <GlassSelect value={entityId} onChange={setEntityId} minWidth={240} searchable options={entityOptions} />
@@ -69,7 +77,7 @@ export default function Audit() {
       </div>
 
       <div className="card table-wrap">
-        {!rows ? <Spinner /> : rows.length === 0 ? (
+        {err && !rows ? <LoadError error={err} onRetry={loadRows} /> : !rows ? <Spinner /> : rows.length === 0 ? (
           <Empty icon="📝" title="No activity yet" sub="Changes will appear here as the team edits data." />
         ) : (
           <table>

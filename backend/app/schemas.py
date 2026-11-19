@@ -14,12 +14,12 @@ class LookupItem(BaseModel):
 
 # --- Resource -------------------------------------------------------------
 class ResourceBase(BaseModel):
-    name: str
-    racf: str | None = None
-    email: str | None = None
-    skills: str | None = None
-    location: str | None = None
-    cell: str | None = None
+    name: str = Field(max_length=200)
+    racf: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=320)
+    skills: str | None = Field(default=None, max_length=2000)
+    location: str | None = Field(default=None, max_length=100)
+    cell: str | None = Field(default=None, max_length=50)
     active: bool = True
     is_lead: bool = False
 
@@ -82,22 +82,22 @@ class ResourceMini(BaseModel):
 
 
 class EnhancementBase(BaseModel):
-    ticket: str
-    grp_code: str | None = None
-    groups: list[str] = []
-    demand_number: str | None = None
-    title: str
-    status_code: str | None = None
-    sub_status_code: str | None = None
+    ticket: str = Field(max_length=100)
+    grp_code: str | None = Field(default=None, max_length=64)
+    groups: list[str] = Field(default=[], max_length=50)
+    demand_number: str | None = Field(default=None, max_length=100)
+    title: str = Field(max_length=500)
+    status_code: str | None = Field(default=None, max_length=64)
+    sub_status_code: str | None = Field(default=None, max_length=64)
     lead_resource_id: int | None = None          # exactly one lead
-    resource_ids: list[int] = []                 # many assigned resources
-    skill_codes: list[str] = []                  # skills involved
-    smoc_lead: str | None = None
+    resource_ids: list[int] = Field(default=[], max_length=200)   # many assigned resources
+    skill_codes: list[str] = Field(default=[], max_length=50)     # skills involved
+    smoc_lead: str | None = Field(default=None, max_length=200)
     initial_estimated_hrs: float | None = None
     approved_hrs: float | None = None
-    comments: str | None = None
-    doc_url: str | None = None
-    change_ticket: str | None = None
+    comments: str | None = Field(default=None, max_length=10000)
+    doc_url: str | None = Field(default=None, max_length=2000)
+    change_ticket: str | None = Field(default=None, max_length=500)
     eta: date | None = None
     active: bool = True
 
@@ -136,6 +136,19 @@ class EnhLinkOut(BaseModel):
 
 class EnhancementOut(EnhancementBase):
     model_config = ConfigDict(from_attributes=True)
+    # Reads must never fail on legacy/migrated rows that exceed the input length caps
+    # (e.g. a demand_number holding many newline-joined DMND numbers). Mirror the
+    # EffortOut.hours precedent: drop max_length on the OUTPUT model.
+    ticket: str
+    grp_code: str | None = None
+    demand_number: str | None = None
+    title: str
+    status_code: str | None = None
+    sub_status_code: str | None = None
+    smoc_lead: str | None = None
+    comments: str | None = None
+    doc_url: str | None = None
+    change_ticket: str | None = None
     id: int
     custom_group_items: list[LookupItem] = []   # this enhancement's own custom groups (code+label)
     links: list[EnhLinkOut] = []                 # extra named documentation links
@@ -183,11 +196,11 @@ class SupportCommentOut(BaseModel):
 
 
 class SupportTicketBase(BaseModel):
-    number: str | None = None            # optional on create; auto-assigned (TASK######) if blank
-    description: str
-    status: str = "In Queue"
+    number: str | None = Field(default=None, max_length=100)   # optional; auto-assigned (TASK######) if blank
+    description: str = Field(max_length=10000)
+    status: str = Field(default="In Queue", max_length=64)
     lead_resource_id: int | None = None
-    resource_ids: list[int] = []
+    resource_ids: list[int] = Field(default=[], max_length=200)
     eta: date | None = None
     active: bool = True
 
@@ -218,4 +231,4 @@ class SupportTicketOut(SupportTicketBase):
 
 
 class SupportCommentIn(BaseModel):
-    body: str
+    body: str = Field(max_length=10000)

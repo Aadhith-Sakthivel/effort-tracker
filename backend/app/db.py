@@ -6,11 +6,29 @@ import re
 from datetime import date, datetime
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, Numeric,
-    String, Table, Text, UniqueConstraint, create_engine, func,
+    Boolean,
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    create_engine,
+    event,
+    func,
 )
 from sqlalchemy.orm import (
-    DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker,
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    sessionmaker,
 )
 
 from .config import get_settings
@@ -24,6 +42,15 @@ engine = create_engine(
     _url, connect_args=_connect_args, pool_pre_ping=True,
     pool_recycle=1800 if settings.is_postgres() else -1, future=True,
 )
+if _url.startswith("sqlite"):
+    # SQLite ignores FK ON DELETE CASCADE unless this pragma is on per-connection.
+    # Without it, deleting a parent leaves orphan child rows (we hit this with groups).
+    @event.listens_for(engine, "connect")
+    def _sqlite_fk_on(dbapi_conn, _rec):  # noqa: ANN001
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
 if settings.token_mode():
     from .lakebase import attach_token_provider
     attach_token_provider(engine, settings.lakebase_instance)
@@ -159,18 +186,18 @@ class Enhancement(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     lead: Mapped[Resource | None] = relationship("Resource", lazy="joined", foreign_keys=[lead_resource_id])
-    groups: Mapped[list["Grp"]] = relationship(secondary=enhancement_group, lazy="selectin",
+    groups: Mapped[list[Grp]] = relationship(secondary=enhancement_group, lazy="selectin",
                                                order_by="Grp.sort_order")
-    resources: Mapped[list["Resource"]] = relationship(secondary=enhancement_resource, lazy="selectin",
+    resources: Mapped[list[Resource]] = relationship(secondary=enhancement_resource, lazy="selectin",
                                                         order_by="Resource.name")
-    skills: Mapped[list["SkillCategory"]] = relationship(secondary=enhancement_skill, lazy="selectin",
+    skills: Mapped[list[SkillCategory]] = relationship(secondary=enhancement_skill, lazy="selectin",
                                                          order_by="SkillCategory.sort_order")
-    efforts: Mapped[list["Effort"]] = relationship(back_populates="enhancement", cascade="all, delete-orphan")
+    efforts: Mapped[list[Effort]] = relationship(back_populates="enhancement", cascade="all, delete-orphan")
     # ORM-level cascade so per-group comments / sub-status are removed on delete even on
     # SQLite (which doesn't enforce FK ON DELETE CASCADE), preventing rowid-reuse bleed.
-    group_comments: Mapped[list["EnhComment"]] = relationship("EnhComment", cascade="all, delete-orphan")
-    group_states: Mapped[list["EnhGroupState"]] = relationship("EnhGroupState", cascade="all, delete-orphan")
-    links: Mapped[list["EnhLink"]] = relationship("EnhLink", cascade="all, delete-orphan", order_by="EnhLink.id")
+    group_comments: Mapped[list[EnhComment]] = relationship("EnhComment", cascade="all, delete-orphan")
+    group_states: Mapped[list[EnhGroupState]] = relationship("EnhGroupState", cascade="all, delete-orphan")
+    links: Mapped[list[EnhLink]] = relationship("EnhLink", cascade="all, delete-orphan", order_by="EnhLink.id")
 
 
 class Effort(Base):
@@ -283,8 +310,8 @@ class SupportTicket(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     lead: Mapped[Resource | None] = relationship("Resource", lazy="joined", foreign_keys=[lead_resource_id])
-    resources: Mapped[list["Resource"]] = relationship(secondary=support_ticket_resource, lazy="selectin")
-    comments: Mapped[list["SupportComment"]] = relationship(
+    resources: Mapped[list[Resource]] = relationship(secondary=support_ticket_resource, lazy="selectin")
+    comments: Mapped[list[SupportComment]] = relationship(
         back_populates="ticket", cascade="all, delete-orphan", order_by="SupportComment.created_at")
 
 

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     pghost: str | None = None
     pgport: int = 5432
-    pgdatabase: str = "ams"
+    pgdatabase: str = "effort_tracker"
     pguser: str | None = None
     pgpassword: str | None = None          # static password (optional)
     pgsslmode: str = "require"
@@ -32,7 +32,10 @@ class Settings(BaseSettings):
     # When running locally with no Postgres configured, use this SQLite file.
     sqlite_path: str = "ams_local.db"
 
-    cors_origins: str = "*"
+    # Comma-separated allowed origins for cross-origin browser calls. Empty by
+    # default: the SPA is served same-origin by this app, so no CORS is needed.
+    # Set to the app URL only if another origin must call the API.
+    cors_origins: str = ""
 
     # Comma-separated emails that always get the full-edit (lead) role — a bootstrap
     # so admins aren't locked out before resource emails are filled in.

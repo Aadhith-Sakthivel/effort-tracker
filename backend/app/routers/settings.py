@@ -6,15 +6,14 @@ they are "retired" by setting active=false, which hides them from the pickers.
 from __future__ import annotations
 
 import re
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import audit
-from ..db import AppSetting, Status, SubStatus, get_db
+from ..db import AppSetting, Grp, Status, SubStatus, get_db
 from ..deps import current_user, require_lead
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -68,11 +67,13 @@ def get_all(db: Session = Depends(get_db)):  # readable by everyone; changes sta
     wd, hr, months, lock_day = freeze_params(db)
     statuses = db.scalars(select(Status).order_by(Status.sort_order, Status.code)).all()
     subs = db.scalars(select(SubStatus).order_by(SubStatus.sort_order, SubStatus.code)).all()
+    grps = db.scalars(select(Grp).where(Grp.is_custom.isnot(True)).order_by(Grp.sort_order, Grp.code)).all()
     return {
         "freeze": {"weekday": wd, "hour": hr, "locked_months": months, "lock_day": lock_day},
         "statuses": [{"code": s.code, "label": s.label, "is_terminal": s.is_terminal,
                       "is_inactive": s.is_inactive, "sort_order": s.sort_order, "active": s.active} for s in statuses],
         "sub_statuses": [{"code": s.code, "label": s.label, "sort_order": s.sort_order, "active": s.active} for s in subs],
+        "groups": [{"code": g.code, "label": g.label, "sort_order": g.sort_order, "active": g.active} for g in grps],
     }
 
 
@@ -112,8 +113,8 @@ def set_freeze(body: FreezeIn, db: Session = Depends(get_db),
 
 # --- statuses --------------------------------------------------------------
 class StatusIn(BaseModel):
-    code: str | None = None
-    label: str
+    code: str | None = Field(default=None, max_length=64)
+    label: str = Field(max_length=100)
     is_terminal: bool = False
     is_inactive: bool = False
     sort_order: int = 100
@@ -128,7 +129,7 @@ def create_status(body: StatusIn, db: Session = Depends(get_db),
     code = (body.code or _slug(body.label)).strip()
     base, n = code, 2
     while db.get(Status, code):
-        code = f"{base}_{n}"; n += 1
+        code, n = f"{base}_{n}", n + 1
     s = Status(code=code, label=body.label.strip(), is_terminal=body.is_terminal,
                is_inactive=body.is_inactive, sort_order=body.sort_order, active=body.active)
     db.add(s)
@@ -161,8 +162,8 @@ def update_status(code: str, body: StatusIn, db: Session = Depends(get_db),
 
 # --- sub-statuses ----------------------------------------------------------
 class SubStatusIn(BaseModel):
-    code: str | None = None
-    label: str
+    code: str | None = Field(default=None, max_length=64)
+    label: str = Field(max_length=100)
     sort_order: int = 100
     active: bool = True
 
@@ -175,7 +176,7 @@ def create_sub_status(body: SubStatusIn, db: Session = Depends(get_db),
     code = (body.code or _slug(body.label)).strip()
     base, n = code, 2
     while db.get(SubStatus, code):
-        code = f"{base}_{n}"; n += 1
+        code, n = f"{base}_{n}", n + 1
     s = SubStatus(code=code, label=body.label.strip(), sort_order=body.sort_order, active=body.active)
     db.add(s)
     audit.log_create(db, user, "sub_status", None, {"code": code, "label": s.label}, label=code)
@@ -197,3 +198,36 @@ def update_sub_status(code: str, body: SubStatusIn, db: Session = Depends(get_db
                    {"label": s.label, "sort_order": s.sort_order, "active": s.active}, label=code)
     db.commit()
     return {"code": s.code, "label": s.label, "sort_order": s.sort_order, "active": s.active}
+
+
+# --- groups (global; retire instead of delete to keep history) -------------
+@router.post("/groups")
+def create_group(body: SubStatusIn, db: Session = Depends(get_db),
+                 user: str = Depends(current_user), _: str = Depends(require_lead)):
+    if not body.label.strip():
+        raise HTTPException(400, "label is required")
+    code = (body.code or _slug(body.label)).strip()
+    base, n = code, 2
+    while db.get(Grp, code):
+        code, n = f"{base}_{n}", n + 1
+    g = Grp(code=code, label=body.label.strip(), sort_order=body.sort_order, active=body.active, is_custom=False)
+    db.add(g)
+    audit.log_create(db, user, "group", None, {"code": code, "label": g.label}, label=code)
+    db.commit()
+    return {"code": g.code, "label": g.label, "sort_order": g.sort_order, "active": g.active}
+
+
+@router.put("/groups/{code}")
+def update_group(code: str, body: SubStatusIn, db: Session = Depends(get_db),
+                 user: str = Depends(current_user), _: str = Depends(require_lead)):
+    g = db.get(Grp, code)
+    if not g:
+        raise HTTPException(404, "group not found")
+    before = {"label": g.label, "sort_order": g.sort_order, "active": g.active}
+    g.label = body.label.strip() or g.label
+    g.sort_order = body.sort_order
+    g.active = body.active
+    audit.log_diff(db, user, "group", None, before,
+                   {"label": g.label, "sort_order": g.sort_order, "active": g.active}, label=code)
+    db.commit()
+    return {"code": g.code, "label": g.label, "sort_order": g.sort_order, "active": g.active}

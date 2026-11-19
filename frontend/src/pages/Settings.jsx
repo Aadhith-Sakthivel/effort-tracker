@@ -13,11 +13,6 @@ const ordinal = (n) => { const s = ["th", "st", "nd", "rd"], v = n % 100; return
 // "Last day (whole month)" + 1st..28th (28 is safe for every month; Last covers 29–31).
 const FREEZE_DAYS = [{ value: "last", label: "Last day (whole month)" },
   ...Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1).padStart(2, "0"), label: `Through the ${ordinal(i + 1)}` }))];
-// Render a stored freeze entry ("YYYY-MM" or "YYYY-MM:DD") as a readable label.
-const freezeLabel = (m) => {
-  if (m.includes(":")) { const [ym, dd] = m.split(":"); return `${fmtMonth(ym)} · through ${ordinal(Number(dd))}`; }
-  return fmtMonth(m);
-};
 
 // One editable row for a status (or sub-status when `sub`). Toggles save immediately;
 // label/order save on blur when changed.
@@ -49,6 +44,7 @@ export default function Settings({ toast, onChanged, canEdit = false }) {
   const [fz, setFz] = useState(null);
   const [newStatus, setNewStatus] = useState("");
   const [newSub, setNewSub] = useState("");
+  const [newGroup, setNewGroup] = useState("");
   const [fMonth, setFMonth] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
   const [fYear, setFYear] = useState(String(YEAR_NOW));
   const [addOpen, setAddOpen] = useState(false);
@@ -65,6 +61,8 @@ export default function Settings({ toast, onChanged, canEdit = false }) {
   const saveSub = async (code, body) => { try { await api.updateSubStatus(code, body); toast("Sub-status updated"); await afterChange(); } catch (e) { toast(e.message, "error"); } };
   const addStatus = async () => { const label = newStatus.trim(); if (!label) return; try { await api.createStatus({ label }); setNewStatus(""); toast("Status added"); await afterChange(); } catch (e) { toast(e.message, "error"); } };
   const addSub = async () => { const label = newSub.trim(); if (!label) return; try { await api.createSubStatus({ label }); setNewSub(""); toast("Sub-status added"); await afterChange(); } catch (e) { toast(e.message, "error"); } };
+  const saveGroup = async (code, body) => { try { await api.updateGroup(code, body); toast("Group updated"); await afterChange(); } catch (e) { toast(e.message, "error"); } };
+  const addGroup = async () => { const label = newGroup.trim(); if (!label) return; try { await api.createGroup({ label }); setNewGroup(""); toast("Group added"); await afterChange(); } catch (e) { toast(e.message, "error"); } };
   // Persist the whole freeze config (weekly rule + locked months) and refresh.
   const persist = async (next, msg) => {
     try { await api.setFreeze({ weekday: Number(next.weekday), hour: Number(next.hour), locked_months: next.locked_months || [], lock_day: next.lock_day || "last" }); setFz(next); toast(msg || "Freeze updated"); load(); }
@@ -156,10 +154,12 @@ export default function Settings({ toast, onChanged, canEdit = false }) {
             <button className="btn btn-primary btn-sm" onClick={addStatus}>+ Add</button>
           </div>
         </div>
-        <table>
-          <thead><tr><th>Label</th><th>Order</th><th>Done column</th><th>Marks inactive</th><th>State</th><th></th></tr></thead>
-          <tbody>{data.statuses.map((s) => <LookupRow key={s.code} s={s} onSave={saveStatus} />)}</tbody>
-        </table>
+        <div className="lookup-scroll">
+          <table className="lookup-table">
+            <thead><tr><th>Label</th><th>Order</th><th>Done column</th><th>Marks inactive</th><th>State</th><th></th></tr></thead>
+            <tbody>{data.statuses.map((s) => <LookupRow key={s.code} s={s} onSave={saveStatus} />)}</tbody>
+          </table>
+        </div>
       </div>
 
       {/* Sub-statuses */}
@@ -171,10 +171,29 @@ export default function Settings({ toast, onChanged, canEdit = false }) {
             <button className="btn btn-primary btn-sm" onClick={addSub}>+ Add</button>
           </div>
         </div>
-        <table>
-          <thead><tr><th>Label</th><th>Order</th><th>State</th><th></th></tr></thead>
-          <tbody>{data.sub_statuses.map((s) => <LookupRow key={s.code} s={s} onSave={saveSub} sub />)}</tbody>
-        </table>
+        <div className="lookup-scroll">
+          <table className="lookup-table">
+            <thead><tr><th>Label</th><th>Order</th><th>State</th><th></th></tr></thead>
+            <tbody>{data.sub_statuses.map((s) => <LookupRow key={s.code} s={s} onSave={saveSub} sub />)}</tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Groups */}
+      <div className="card table-wrap" style={{ marginTop: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "16px 16px 12px", flexWrap: "wrap" }}>
+          <div className="kpi-label">Groups <span className="muted" style={{ fontWeight: 400 }}>— shared across enhancements &amp; the timesheet; retire to hide from pickers</span></div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input className="search" placeholder="New group name…" value={newGroup} onChange={(e) => setNewGroup(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addGroup(); }} />
+            <button className="btn btn-primary btn-sm" onClick={addGroup}>+ Add</button>
+          </div>
+        </div>
+        <div className="lookup-scroll">
+          <table className="lookup-table">
+            <thead><tr><th>Label</th><th>Order</th><th>State</th><th></th></tr></thead>
+            <tbody>{(data.groups || []).map((g) => <LookupRow key={g.code} s={g} onSave={saveGroup} sub />)}</tbody>
+          </table>
+        </div>
       </div>
       </fieldset>
     </>

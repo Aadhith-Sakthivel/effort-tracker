@@ -10,3 +10,10 @@ __pycache__/
 .vite/
 frontend/dist/
 build/
+frontend/node_modules/
+
+# local tooling / verification artifacts (not part of the app)
+.playwright-mcp/
+.pytest_cache/
+s7-enhancements-error.png
+

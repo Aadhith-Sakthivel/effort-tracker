@@ -4,17 +4,32 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import audit
 from ..db import (
-    Effort, EnhComment, EnhGroupState, EnhLink, Enhancement, Grp, Resource, SkillCategory, Status, SubStatus, get_db,
+    Effort,
+    Enhancement,
+    EnhComment,
+    EnhGroupState,
+    EnhLink,
+    Grp,
+    Resource,
+    SkillCategory,
+    Status,
+    SubStatus,
+    get_db,
 )
 from ..deps import current_role, current_user, require_lead, require_member
 from ..schemas import (
-    EnhancementCreate, EnhancementOut, EnhancementUpdate, EnhLinkOut, LookupItem, ResourceMini,
+    EnhancementCreate,
+    EnhancementOut,
+    EnhancementUpdate,
+    EnhLinkOut,
+    LookupItem,
+    ResourceMini,
 )
 
 router = APIRouter(prefix="/api/enhancements", tags=["enhancements"])
@@ -60,6 +75,30 @@ def _substatus_label(db: Session, code: str | None) -> str:
     return s.label if s else code
 
 
+def _grp_label(db: Session, code: str | None) -> str:
+    if not code:
+        return "—"
+    g = db.get(Grp, code)
+    return g.label if g else code
+
+
+def _audit_display(db: Session, field: str, value):
+    """Translate code-valued fields to human labels for the audit log (so it never
+    shows status/sub-status/group codes or a bare resource id)."""
+    if value is None or value == "":
+        return value
+    if field == "status_code":
+        return _status_label(db, value)
+    if field in ("sub_status_code",):
+        return _substatus_label(db, value)
+    if field == "grp_code":
+        return _grp_label(db, value)
+    if field == "lead_resource_id":
+        r = db.get(Resource, value)
+        return r.name if r else value
+    return value
+
+
 def _res_objects(db: Session, ids: list[int]) -> list[Resource]:
     if not ids:
         return []
@@ -92,7 +131,7 @@ def _to_out(e: Enhancement, actual: float, latest_note: tuple | None = None) -> 
     return EnhancementOut(
         id=e.id, ticket=e.ticket, grp_code=e.grp_code, groups=group_codes,
         custom_group_items=custom_items,
-        links=[EnhLinkOut(id=l.id, name=l.name, url=l.url) for l in e.links],
+        links=[EnhLinkOut(id=ln.id, name=ln.name, url=ln.url) for ln in e.links],
         demand_number=e.demand_number,
         resource_ids=[r.id for r in e.resources],
         resources=[ResourceMini(id=r.id, name=r.name) for r in e.resources],
@@ -145,8 +184,12 @@ def list_enhancements(
     grp_code: str | None = None,
     q: str | None = None,
     active_only: bool = True,
+    limit: int = 100,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
+    limit = max(1, min(limit, 500))   # bound the page (default 100, hard max 500)
+    offset = max(0, offset)
     stmt = select(Enhancement).order_by(Enhancement.updated_at.desc())
     if active_only:
         inactive_codes = [s.code for s in db.scalars(select(Status).where(Status.is_inactive.is_(True))).all()]
@@ -160,6 +203,7 @@ def list_enhancements(
     if q:
         like = f"%{q}%"
         stmt = stmt.where((Enhancement.ticket.ilike(like)) | (Enhancement.title.ilike(like)))
+    stmt = stmt.limit(limit).offset(offset)
     rows = db.scalars(stmt).all()
     ids = [e.id for e in rows]
     actuals = _actual_map(db, ids)
@@ -228,10 +272,10 @@ def update_enhancement(eid: int, body: EnhancementUpdate, db: Session = Depends(
     # Overall status / sub-status changes → status entries broadcast to every group tab's thread.
     if "status_code" in changes and before.get("status_code") != changes["status_code"]:
         db.add(EnhComment(enhancement_id=e.id, grp_code=None, kind="status",
-                          body=f"Status → {_status_label(db, changes['status_code'])}", created_by=user))
+                          body=f"Card status → {_status_label(db, changes['status_code'])}", created_by=user))
     if "sub_status_code" in changes and before.get("sub_status_code") != changes["sub_status_code"]:
         db.add(EnhComment(enhancement_id=e.id, grp_code=None, kind="status",
-                          body=f"Sub-status → {_substatus_label(db, changes['sub_status_code'])}", created_by=user))
+                          body=f"Card sub-status → {_substatus_label(db, changes['sub_status_code'])}", created_by=user))
     if new_codes is not None:
         old_labels = [g.label for g in e.groups]        # capture labels before reassigning
         # new_codes may include existing custom-group codes — they are real grp rows,
@@ -249,10 +293,12 @@ def update_enhancement(eid: int, body: EnhancementUpdate, db: Session = Depends(
         new_names = ", ".join(r.name for r in e.resources)
         audit.log_diff(db, user, "enhancement", e.id, {"resources": old_names}, {"resources": new_names}, label=e.ticket)
     if new_skills is not None:
-        old_sk = ", ".join(s.code for s in e.skills)
+        old_sk = ", ".join(s.label for s in e.skills)
         e.skills = _skill_objects(db, new_skills)
-        audit.log_diff(db, user, "enhancement", e.id, {"skills": old_sk}, {"skills": ", ".join(new_skills)}, label=e.ticket)
-    audit.log_diff(db, user, "enhancement", e.id, before, changes, label=e.ticket)
+        audit.log_diff(db, user, "enhancement", e.id, {"skills": old_sk}, {"skills": ", ".join(s.label for s in e.skills)}, label=e.ticket)
+    disp_before = {k: _audit_display(db, k, v) for k, v in before.items()}
+    disp_changes = {k: _audit_display(db, k, v) for k, v in changes.items()}
+    audit.log_diff(db, user, "enhancement", e.id, disp_before, disp_changes, label=e.ticket)
     db.commit()
     db.refresh(e)
     return _to_out(e, _actual_map(db, [e.id]).get(e.id, 0.0), _latest_note_map(db, [e.id]).get(e.id))
@@ -318,8 +364,8 @@ def group_detail(eid: int, db: Session = Depends(get_db)):
 
 
 class EnhCommentIn(BaseModel):
-    grp_code: str | None = None     # None = card-level (shown in every group tab)
-    body: str
+    grp_code: str | None = Field(default=None, max_length=64)   # None = card-level (every group tab)
+    body: str = Field(max_length=10000)
 
 
 @router.post("/{eid}/comment")
@@ -366,10 +412,10 @@ def set_group_substatus(eid: int, body: GroupSubStatusIn, db: Session = Depends(
         st.sub_status_code = body.sub_status_code or None
     if changed:
         db.add(EnhComment(enhancement_id=eid, grp_code=body.grp_code, kind="status",
-                          body=f"Sub-status → {_substatus_label(db, body.sub_status_code)}", created_by=user))
+                          body=f"Group sub-status → {_substatus_label(db, body.sub_status_code)}", created_by=user))
     glabel = next((g.label for g in e.groups if g.code == body.grp_code), body.grp_code)
     audit.log_diff(db, user, "enhancement", e.id,
-                   {f"sub-status ({glabel})": ""}, {f"sub-status ({glabel})": body.sub_status_code or "—"},
+                   {f"sub-status ({glabel})": ""}, {f"sub-status ({glabel})": _substatus_label(db, body.sub_status_code)},
                    label=e.ticket)
     db.commit()
     return _group_detail(db, e)
@@ -377,8 +423,8 @@ def set_group_substatus(eid: int, body: GroupSubStatusIn, db: Session = Depends(
 
 # --- Extra named documentation links ---------------------------------------
 class EnhLinkIn(BaseModel):
-    name: str
-    url: str
+    name: str = Field(max_length=200)
+    url: str = Field(max_length=2000)
 
 
 @router.post("/{eid}/links", response_model=EnhancementOut)

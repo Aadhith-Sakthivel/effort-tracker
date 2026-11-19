@@ -14,13 +14,16 @@ router = APIRouter(prefix="/api/resources", tags=["resources"])
 
 
 @router.get("", response_model=list[ResourceOut])
-def list_resources(active_only: bool = False, leads_only: bool = False, db: Session = Depends(get_db)):
+def list_resources(active_only: bool = False, leads_only: bool = False,
+                   limit: int = 100, offset: int = 0, db: Session = Depends(get_db)):
+    limit = max(1, min(limit, 500))   # bound the page (default 100, hard max 500)
+    offset = max(0, offset)
     stmt = select(Resource).order_by(Resource.active.desc(), Resource.name)
     if active_only:
         stmt = stmt.where(Resource.active.is_(True))
     if leads_only:
         stmt = stmt.where(Resource.is_lead.is_(True), Resource.active.is_(True))
-    return db.scalars(stmt).all()
+    return db.scalars(stmt.limit(limit).offset(offset)).all()
 
 
 @router.post("", response_model=ResourceOut, status_code=201)

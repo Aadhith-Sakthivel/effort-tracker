@@ -3,7 +3,7 @@
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\deploy.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\deploy.ps1 -SkipBuild
-param([switch]$SkipBuild)
+param([switch]$SkipBuild, [switch]$SkipMigrate)
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
@@ -30,6 +30,13 @@ Write-Host "Force-importing frontend bundle..." -ForegroundColor Cyan
 & $dbx workspace import "$ws/frontend/dist/index.html" --file "$repo\frontend\dist\index.html" --format RAW --overwrite -p $profile
 Get-ChildItem "$repo\frontend\dist\assets" -File | ForEach-Object {
   & $dbx workspace import "$ws/frontend/dist/assets/$($_.Name)" --file $_.FullName --format RAW --overwrite -p $profile
+}
+
+# Apply DB migrations before the new code goes live (AUTO_INIT_DB=0 → Alembic owns
+# the schema). Skippable for a code-only redeploy with no schema change.
+if (-not $SkipMigrate) {
+  Write-Host "Applying Alembic migrations to Lakebase..." -ForegroundColor Cyan
+  & "$PSScriptRoot\migrate-lakebase.ps1"
 }
 
 Write-Host "Deploying app..." -ForegroundColor Cyan

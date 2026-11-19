@@ -100,6 +100,22 @@ export function Empty({ icon = "📭", title, sub }) {
   );
 }
 
+// Error state for a page whose initial data load failed (infinite-spinner guard).
+export function LoadError({ error, onRetry }) {
+  return (
+    <div className="empty">
+      <div className="empty-ico">⚠️</div>
+      <div style={{ fontWeight: 600, color: "var(--text-2)" }}>Couldn’t load this page</div>
+      <div className="muted" style={{ marginTop: 4, maxWidth: 440 }}>
+        {String(error?.message || error || "Something went wrong.")}
+      </div>
+      {onRetry && (
+        <button className="btn btn-primary" style={{ marginTop: 14 }} onClick={onRetry}>Retry</button>
+      )}
+    </div>
+  );
+}
+
 export function Modal({ title, children, onClose, footer }) {
   useEffect(() => {
     const h = (e) => e.key === "Escape" && onClose();

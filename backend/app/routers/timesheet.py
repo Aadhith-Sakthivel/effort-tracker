@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/timesheet", tags=["timesheet"])
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
-def _weekly_from(db) -> "date":
+def _weekly_from(db) -> date:
     """Earliest editable date from the weekly rolling rule (lead-configured day/time)."""
     wd, hr, _, _ = freeze_params(db)
     return editable_from(wd, hr)
@@ -54,8 +54,12 @@ def grid(
     q: str | None = None,
     include_empty: bool = True,
     active_only: bool = True,
+    limit: int = 100,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
+    limit = max(1, min(limit, 500))   # bound how many enhancements (rows) the grid returns
+    offset = max(0, offset)
     # Default to the current month in US Eastern time.
     if not date_from and not date_to:
         date_from, date_to = month_bounds(est_today())
@@ -93,6 +97,7 @@ def grid(
     if q:
         like = f"%{q}%"
         estmt = estmt.where((Enhancement.ticket.ilike(like)) | (Enhancement.title.ilike(like)))
+    estmt = estmt.limit(limit).offset(offset)
     enh = db.scalars(estmt).all()
     enh_by_id = {e.id: e for e in enh}
 
@@ -188,71 +193,6 @@ def _check_cap(enh: Enhancement, resource_id: int | None, total: float) -> None:
         raise HTTPException(400, f"Whole-team total can't exceed {cap}h/day ({who}).")
 
 
-class CellIn(BaseModel):
-    enhancement_id: int
-    work_date: date
-    hours: float = Field(ge=0)   # per-person 24h cap enforced in the handler
-    resource_id: int | None = None
-    skill_code: str | None = None
-    note: str | None = None
-
-
-@router.put("/cell")
-def set_cell(body: CellIn, db: Session = Depends(get_db), user: str = Depends(current_user),
-             _: str = Depends(require_member)):
-    enh = db.get(Enhancement, body.enhancement_id)
-    if not enh:
-        raise HTTPException(404, "enhancement not found")
-    if _is_frozen(db, body.work_date):
-        raise HTTPException(403, "This week is locked — timesheets freeze Friday 1 PM ET.")
-    _check_cap(enh, body.resource_id, body.hours)
-    label = _cell_label(db, body.enhancement_id, body.work_date, body.resource_id)
-    existing = db.scalar(select(Effort).where(
-        Effort.enhancement_id == body.enhancement_id,
-        Effort.resource_id.is_(body.resource_id) if body.resource_id is None else Effort.resource_id == body.resource_id,
-        Effort.skill_code.is_(body.skill_code) if body.skill_code is None else Effort.skill_code == body.skill_code,
-        Effort.work_date == body.work_date,
-    ))
-    if body.hours == 0:
-        if existing:
-            audit.log_delete(db, user, "effort", existing.id,
-                             {"enhancement_id": body.enhancement_id, "work_date": str(body.work_date), "hours": float(existing.hours)},
-                             label=label)
-            db.delete(existing)
-            db.commit()
-        return {"ok": True, "hours": 0}
-    if existing:
-        old = float(existing.hours)
-        existing.hours = body.hours
-        existing.updated_by = user
-        if body.note is not None:
-            existing.note = body.note
-        audit.log_diff(db, user, "effort", existing.id, {"hours": old}, {"hours": body.hours}, label=label)
-    else:
-        existing = Effort(enhancement_id=body.enhancement_id, resource_id=body.resource_id,
-                          skill_code=body.skill_code, work_date=body.work_date, hours=body.hours,
-                          note=body.note, updated_by=user)
-        db.add(existing)
-        db.flush()
-        audit.log_create(db, user, "effort", existing.id,
-                         {"enhancement_id": body.enhancement_id, "work_date": str(body.work_date), "hours": body.hours},
-                         label=label)
-    db.commit()
-    return {"ok": True, "hours": body.hours, "id": existing.id}
-
-
-@router.get("/cell-detail")
-def cell_detail(enhancement_id: int, work_date: date, resource_id: int | None = None,
-                db: Session = Depends(get_db)):
-    """Current per-group hours for one cell (enhancement × date × resource)."""
-    stmt = select(Effort.grp_code, Effort.hours, Effort.note).where(
-        Effort.enhancement_id == enhancement_id, Effort.work_date == work_date,
-        Effort.resource_id.is_(None) if resource_id is None else Effort.resource_id == resource_id,
-    )
-    rows = db.execute(stmt).all()
-    return {"items": [{"grp_code": g, "hours": float(h), "note": n} for g, h, n in rows]}
-
-
 class CellGroupIn(BaseModel):
     enhancement_id: int
     work_date: date
@@ -296,60 +236,3 @@ def set_cell_group(body: CellGroupIn, db: Session = Depends(get_db), user: str =
                    label=_cell_label(db, body.enhancement_id, body.work_date, body.resource_id))
     db.commit()
     return {"ok": True, "hours": body.hours}
-
-
-class GrpAlloc(BaseModel):
-    grp_code: str | None = None
-    hours: float = Field(ge=0)   # per-person day cap enforced in the handler
-
-
-class CellGroupsIn(BaseModel):
-    enhancement_id: int
-    work_date: date
-    resource_id: int | None = None
-    note: str | None = None
-    allocations: list[GrpAlloc]
-
-
-@router.put("/cell-groups")
-def set_cell_groups(body: CellGroupsIn, db: Session = Depends(get_db), user: str = Depends(current_user),
-                    _: str = Depends(require_member)):
-    """Replace all effort rows for one cell with the given per-group allocations.
-
-    Used for every timesheet edit: single-group enhancements send one allocation,
-    multi-group send several. Replacing all rows avoids double-counting the old
-    (group-less) migrated row.
-    """
-    enh = db.get(Enhancement, body.enhancement_id)
-    if not enh:
-        raise HTTPException(404, "enhancement not found")
-    if _is_frozen(db, body.work_date):
-        raise HTTPException(403, "This week is locked — timesheets freeze Friday 1 PM ET.")
-    total = round(sum(a.hours for a in body.allocations), 2)
-    # Person: 8h/day. Whole team: (assigned people incl. lead) × 8h/day.
-    _check_cap(enh, body.resource_id, total)
-
-    # Scope of rows this edit replaces. A per-person edit replaces only that person's
-    # rows. A whole-team edit replaces the ENTIRE cell (every row for this
-    # enhancement+date, person-attributed or not) so the grid cell always equals the
-    # new value — otherwise leftover per-person rows would double-count and reducing
-    # the number could paradoxically raise the total / actual.
-    conds = [Effort.enhancement_id == body.enhancement_id, Effort.work_date == body.work_date]
-    if body.resource_id is not None:
-        conds.append(Effort.resource_id == body.resource_id)
-    existing = db.scalars(select(Effort).where(*conds)).all()
-    old_total = round(sum(float(e.hours) for e in existing), 2)
-    for e in existing:
-        db.delete(e)
-    db.flush()
-
-    for a in body.allocations:
-        if a.hours and a.hours > 0:
-            db.add(Effort(enhancement_id=body.enhancement_id, resource_id=body.resource_id,
-                          grp_code=a.grp_code, work_date=body.work_date, hours=a.hours, note=body.note, updated_by=user))
-    parts = ", ".join(f"{a.grp_code or 'unspecified'}:{a.hours}" for a in body.allocations if a.hours)
-    audit.log_diff(db, user, "effort", body.enhancement_id,
-                   {"day_hours": old_total}, {"day_hours": total, "by_group": parts},
-                   label=_cell_label(db, body.enhancement_id, body.work_date, body.resource_id))
-    db.commit()
-    return {"ok": True, "total": total}

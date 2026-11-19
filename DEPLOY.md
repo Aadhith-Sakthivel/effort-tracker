@@ -125,7 +125,7 @@ Most values come from `app.yaml`. Confirm in the app's **Environment** settings:
 
 | Var | Value |
 |---|---|
-| `AUTO_INIT_DB` | `1` |
+| `AUTO_INIT_DB` | `1` for the demo (creates tables on first boot); `0` when Alembic owns the schema — see Step 7 |
 | `ADMIN_EMAILS` | `<your-email>` |
 | `PGHOST` | `<your-lakebase-host>.database.cloud.databricks.com` |
 | `PGPORT` | `5432` |
@@ -136,11 +136,18 @@ Most values come from `app.yaml`. Confirm in the app's **Environment** settings:
 > Rely on the Resource binding for `PGUSER`/`PGPASSWORD`. Do **not** set
 > `LAKEBASE_INSTANCE_NAME` for a Lakebase *project*.
 
-## Step 7 — Deploy
+## Step 7 — Apply migrations, then deploy
+
+Because `AUTO_INIT_DB=0`, the app no longer creates tables at startup — Alembic owns the
+schema. Apply migrations (`scripts/deploy.ps1` does this automatically before deploying):
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts\migrate-lakebase.ps1   # alembic upgrade head
 databricks apps deploy effort-tracker --source-code-path /Workspace/Users/<your-email>/effort-tracker
 ```
+
+> A database seeded the old way (pre-Alembic) must be stamped once first:
+> set the `PG*` env, then `cd backend && python -m alembic stamp head`.
 
 Open the app URL from the Apps UI. It's behind workspace SSO; the signed-in user's
 email is stamped on every audit entry automatically.

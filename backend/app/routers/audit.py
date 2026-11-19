@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import AuditLog, get_db
+from ..deps import require_lead
 from ..schemas import AuditOut
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
@@ -17,6 +18,7 @@ def list_audit(
     entity_id: int | None = None,
     limit: int = 200,
     db: Session = Depends(get_db),
+    _: str = Depends(require_lead),
 ):
     stmt = select(AuditLog).order_by(AuditLog.changed_at.desc()).limit(min(limit, 1000))
     if entity_type:

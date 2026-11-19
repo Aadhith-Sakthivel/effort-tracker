@@ -44,4 +44,7 @@ def fresh_db():
 
 @pytest.fixture()
 def client():
-    return TestClient(app)
+    c = TestClient(app)
+    # The SPA sends this on every call; the backend requires it on writes (CSRF guard).
+    c.headers.update({"X-Requested-With": "effort-tracker"})
+    return c

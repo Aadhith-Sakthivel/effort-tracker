@@ -18,7 +18,11 @@ from .. import audit
 from ..db import Resource, SupportComment, SupportTicket, get_db
 from ..deps import current_role, current_user, require_lead, require_member
 from ..schemas import (
-    SupportCommentIn, SupportCommentOut, SupportTicketCreate, SupportTicketOut, SupportTicketUpdate,
+    SupportCommentIn,
+    SupportCommentOut,
+    SupportTicketCreate,
+    SupportTicketOut,
+    SupportTicketUpdate,
 )
 
 router = APIRouter(prefix="/api/support-tickets", tags=["support"])
@@ -125,7 +129,14 @@ def update_ticket(tid: int, body: SupportTicketUpdate, db: Session = Depends(get
     for kind, text in activity:
         db.add(SupportComment(ticket_id=t.id, body=text, created_by=user, kind=kind))
     if changes:
-        audit.log_diff(db, user, "support_ticket", t.id, before, changes, label=t.number)
+        def _disp(field, value):
+            if field == "lead_resource_id" and value:
+                r = db.get(Resource, value)
+                return r.name if r else value
+            return value
+        db_before = {k: _disp(k, v) for k, v in before.items()}
+        db_changes = {k: _disp(k, v) for k, v in changes.items()}
+        audit.log_diff(db, user, "support_ticket", t.id, db_before, db_changes, label=t.number)
     db.commit()
     db.refresh(t)
     return _to_out(t)

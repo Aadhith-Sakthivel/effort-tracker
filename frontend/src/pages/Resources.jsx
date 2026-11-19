@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { Empty, GlassSelect, Modal, Spinner } from "../components/ui";
+import { Empty, GlassSelect, LoadError, Modal, Spinner } from "../components/ui";
 
 const blank = { name: "", racf: "", email: "", skills: "", location: "Onshore", cell: "", active: true, is_lead: false };
 
@@ -148,7 +148,8 @@ export default function Resources({ toast, onChanged, canEdit = false, canContac
   const [exp, setExp] = useState({ loc: "", role: "", inactive: false });
   const openExport = () => { setExp({ loc: locFilter, role: roleFilter, inactive: showInactive }); setExporting(true); };
 
-  const load = () => { api.resources().then(setRows); };   // keep rows during refetch (no flicker)
+  const [err, setErr] = useState(null);
+  const load = () => { setErr(null); api.resources().then(setRows).catch(setErr); };   // keep rows during refetch (no flicker)
   useEffect(load, []);
 
   const save = async (body, isEdit) => {
@@ -215,7 +216,7 @@ export default function Resources({ toast, onChanged, canEdit = false, canContac
         <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={openExport}>⬇ Export CSV</button>
       </div>
 
-      {!rows ? <Spinner /> : filtered.length === 0 ? (
+      {err && !rows ? <LoadError error={err} onRetry={load} /> : !rows ? <Spinner /> : filtered.length === 0 ? (
         <div className="card table-wrap"><Empty icon="👥" title="No team members match" sub="Adjust filters or add a member." /></div>
       ) : (
         <div className="team-grid">

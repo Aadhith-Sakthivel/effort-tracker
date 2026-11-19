@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { Empty, GlassSelect, Modal, Spinner } from "../components/ui";
+import { Empty, GlassSelect, LoadError, Modal, Spinner } from "../components/ui";
 
 const DAILY_TARGET = 8; // hours flagged as "over" above this per cell
 
@@ -119,14 +119,13 @@ function ConfirmChange({ pending, resourceId, resourceName, toast, onSaved, onCa
   );
 }
 
-export default function Timesheet({ lookups, resources, toast, canEdit = false, meResourceId = "" }) {
+export default function Timesheet({ lookups, resources, toast, canEdit = false }) {
   const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
   const [from, setFrom] = useState(null);
-  const [to, setTo] = useState(null);
-  // Default to "Whole team" so the (team-total) historical hours are visible; pick a
-  // person from the "Who" dropdown to view/log an individual's time. meResourceId is
-  // kept available for a future "my timesheet" shortcut.
-  const [resourceId, setResourceId] = useState("");
+  const [, setTo] = useState(null);
+  // Hours are the whole-team total per ticket/day (no per-person picker wired in).
+  const [resourceId] = useState("");
   const [assignee, setAssignee] = useState("");   // filter rows to a person's assigned tickets
   const [status, setStatus] = useState("");       // filter rows to a status
   const [showInactive, setShowInactive] = useState(false);  // default: active enhancements only
@@ -145,7 +144,7 @@ export default function Timesheet({ lookups, resources, toast, canEdit = false, 
       grp_code: grp || undefined, status_code: status || undefined, q: q || undefined,
       active_only: !showInactive,
       include_empty: true, // show every active ticket so time can be entered on any of them
-    }).then((d) => { setData(d); setFrom(d.date_from); setTo(d.date_to); });
+    }).then((d) => { setData(d); setFrom(d.date_from); setTo(d.date_to); setErr(null); }).catch(setErr);
   };
   useEffect(() => { load(from); }, [resourceId, assignee, grp, status, q, showInactive]);
 
@@ -226,7 +225,7 @@ export default function Timesheet({ lookups, resources, toast, canEdit = false, 
       </div>
 
       <div className="card ts-scroll" ref={scrollRef}>
-        {!data ? <Spinner /> : data.rows.length === 0 ? (
+        {err && !data ? <LoadError error={err} onRetry={() => load(from)} /> : !data ? <Spinner /> : data.rows.length === 0 ? (
           <Empty icon="🗓️" title="No logged hours in this range" sub="Use Prev / Next to find data, or clear filters." />
         ) : (
           <table className="ts">

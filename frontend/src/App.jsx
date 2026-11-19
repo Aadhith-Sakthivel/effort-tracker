@@ -20,7 +20,7 @@ const NAV = [
   { key: "timesheet", label: "Timesheet", ico: "🗓" },
   { key: "support", label: "Support tickets", ico: "🎫" },
   { key: "resources", label: "Team", ico: "👥" },
-  { key: "audit", label: "Audit log", ico: "↻" },
+  { key: "audit", label: "Audit log", ico: "↻", leadOnly: true },
   { key: "settings", label: "Settings", ico: "⚙" },
 ];
 
@@ -31,6 +31,7 @@ export default function App() {
   const [me, setMe] = useState(null);
   const [toasts, setToasts] = useState([]);     // { id, type, msg }
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem("theme") || "dark"; } catch { return "dark"; } });
+  const [menuOpen, setMenuOpen] = useState(false);   // mobile nav dropdown
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     try { localStorage.setItem("theme", theme); } catch {}
@@ -100,7 +101,17 @@ export default function App() {
             aria-label="Toggle dark mode" title={theme === "dark" ? "Switch to light" : "Switch to dark"}>
             {theme === "dark" ? "☀" : "☾"}
           </button>
+          <button className="nav-burger" onClick={() => setMenuOpen((o) => !o)} aria-label="Menu">☰</button>
         </div>
+        {menuOpen && <>
+          <div className="nav-menu-backdrop" onClick={() => setMenuOpen(false)} />
+          <div className="nav-menu">
+            {NAV.filter((n) => !n.leadOnly || canEditAll).map((n) => (
+              <button key={n.key} className={`nav-menu-item ${page === n.key ? "active" : ""}`}
+                onClick={() => { setPage(n.key); setMenuOpen(false); }}>{n.label}</button>
+            ))}
+          </div>
+        </>}
       </header>
 
       <main className="main">
@@ -113,7 +124,7 @@ export default function App() {
               {page === "timesheet" && <Timesheet lookups={lookups} resources={resources} toast={toast} canEdit={canEdit} meResourceId={myResourceId} />}
               {page === "support" && <SupportTickets toast={toast} resources={resources} canEditAll={canEditAll} canEdit={canEdit} />}
               {page === "resources" && <Resources toast={toast} onChanged={loadResources} canEdit={canEditAll} canContact={canEdit} meEmail={me?.email} />}
-              {page === "audit" && <Audit />}
+              {page === "audit" && canEditAll && <Audit />}
               {page === "settings" && <Settings toast={toast} canEdit={canEditAll} onChanged={() => api.lookups().then(setLookups)} />}
             </div>
           </ErrorBoundary>

@@ -6,6 +6,7 @@ never has to show a meaningless numeric id.
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -17,11 +18,16 @@ def _s(v: Any) -> str | None:
     return None if v is None else str(v)
 
 
+def _json(snapshot: dict) -> str:
+    """Stable JSON for snapshots (default=str handles date/Decimal)."""
+    return json.dumps(snapshot, default=str, ensure_ascii=False, sort_keys=True)
+
+
 def log_create(db: Session, user: str, entity_type: str, entity_id: int, snapshot: dict,
                label: str | None = None) -> None:
     db.add(AuditLog(
         entity_type=entity_type, entity_id=entity_id, entity_label=label, action="create",
-        field=None, old_value=None, new_value=str(snapshot), changed_by=user,
+        field=None, old_value=None, new_value=_json(snapshot), changed_by=user,
     ))
 
 
@@ -29,7 +35,7 @@ def log_delete(db: Session, user: str, entity_type: str, entity_id: int, snapsho
                label: str | None = None) -> None:
     db.add(AuditLog(
         entity_type=entity_type, entity_id=entity_id, entity_label=label, action="delete",
-        field=None, old_value=str(snapshot), new_value=None, changed_by=user,
+        field=None, old_value=_json(snapshot), new_value=None, changed_by=user,
     ))
 
 

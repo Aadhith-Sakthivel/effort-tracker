@@ -4,7 +4,7 @@ import {
   ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { api } from "../api";
-import { GlassSelect, Spinner, fmtHrs } from "../components/ui";
+import { GlassSelect, LoadError, Spinner, fmtHrs } from "../components/ui";
 import { COLORS } from "../components/format";
 
 function KpiCard({ label, value, unit, foot }) {
@@ -57,22 +57,27 @@ function EnhTip({ active, payload }) {
 
 export default function Dashboard() {
   const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
   const [months, setMonths] = useState([]);
   const [month, setMonth] = useState("");
   const [msum, setMsum] = useState(null);
 
-  useEffect(() => {
+  const load = () => {
+    setErr(null);
     Promise.all([api.kpi(), api.byStatus(), api.byGroup(), api.hoursByMonth(), api.hoursByGroup()])
-      .then(([kpi, byStatus, byGroup, byMonth, byGroupHours]) => setD({ kpi, byStatus, byGroup, byMonth, byGroupHours }));
-    api.months().then((r) => { setMonths(r.months); setMonth(r.current); });
-  }, []);
+      .then(([kpi, byStatus, byGroup, byMonth, byGroupHours]) => setD({ kpi, byStatus, byGroup, byMonth, byGroupHours }))
+      .catch(setErr);
+    api.months().then((r) => { setMonths(r.months); setMonth(r.current); }).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
 
   useEffect(() => {
     if (!month) return;
     // Keep the current snapshot while the new month loads (no chart flicker).
-    api.monthSummary(month).then(setMsum);
+    api.monthSummary(month).then(setMsum).catch(() => {});
   }, [month]);
 
+  if (err) return <LoadError error={err} onRetry={load} />;
   if (!d) return <Spinner />;
   const util = d.kpi.total_approved_hrs ? Math.round((d.kpi.total_actual_hrs / d.kpi.total_approved_hrs) * 100) : 0;
 
@@ -257,10 +262,11 @@ export default function Dashboard() {
 
         <div className="card chart-card">
           <div className="chart-title">Enhancements by group</div>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={[...d.byGroup].sort((a, b) => b.count - a.count)} margin={{ left: -18, right: 8, top: 6 }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={[...d.byGroup].sort((a, b) => b.count - a.count)} margin={{ left: -18, right: 8, top: 6, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="grp" tick={axis} tickLine={false} axisLine={false} interval={0} />
+              <XAxis dataKey="grp" tick={{ ...axis, fontSize: 10.5 }} tickLine={false} axisLine={false}
+                interval={0} angle={-35} textAnchor="end" height={70} />
               <YAxis tick={axis} tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip {...tip} cursor={{ fill: "var(--accent-soft)" }} />
               <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="#0071e3" />
@@ -272,10 +278,10 @@ export default function Dashboard() {
           <div className="chart-title">Logged hours by group</div>
           {d.byGroupHours && d.byGroupHours.length ? (
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={d.byGroupHours.slice(0, 10)} layout="vertical" margin={{ left: 20, right: 12, top: 6 }}>
+              <BarChart data={d.byGroupHours.slice(0, 10)} layout="vertical" margin={{ left: 4, right: 12, top: 6 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                 <XAxis type="number" tick={axis} tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="grp" tick={{ ...axis, fontSize: 12 }} width={76} interval={0} tickLine={false} axisLine={false} />
+                <YAxis type="category" dataKey="grp" tick={{ ...axis, fontSize: 10 }} width={132} interval={0} tickLine={false} axisLine={false} />
                 <Tooltip {...tip} cursor={{ fill: "var(--accent-soft)" }} />
                 <Bar dataKey="hours" radius={[0, 6, 6, 0]} fill="#30a46c" />
               </BarChart>

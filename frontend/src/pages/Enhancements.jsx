@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../api";
-import { ChipMultiSelect, Empty, GlassSelect, Modal, Pill, Select, Spinner, fmtHrs } from "../components/ui";
+import { ChipMultiSelect, Empty, GlassSelect, LoadError, Modal, Pill, Select, Spinner, fmtHrs } from "../components/ui";
 import { Avatars, relTime } from "../components/format";
 
 const blank = {
@@ -187,11 +187,13 @@ function HoursBar({ actual, approved }) {
 
 export default function Enhancements({ lookups, resources, toast, canEdit = false }) {
   const [rows, setRows] = useState(null);
+  const [err, setErr] = useState(null);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [grp, setGrp] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState(null); // object | "new" | null
+  const [confirmDel, setConfirmDel] = useState(null);   // enhancement pending delete
   const [exporting, setExporting] = useState(false);
   const [exportAll, setExportAll] = useState(null);   // full list fetched for export
   const [exp, setExp] = useState({ grp: "", status: "", inactive: false });   // popup's own filters
@@ -235,7 +237,8 @@ export default function Enhancements({ lookups, resources, toast, canEdit = fals
 
   const load = () => {
     // Keep rows visible during refetch (no flicker); Spinner only on first load.
-    api.enhancements({ q, status_code: status, grp_code: grp, active_only: !showInactive }).then(setRows);
+    setErr(null);
+    api.enhancements({ q, status_code: status, grp_code: grp, active_only: !showInactive }).then(setRows).catch(setErr);
   };
   useEffect(load, [q, status, grp, showInactive]);
 
@@ -246,12 +249,13 @@ export default function Enhancements({ lookups, resources, toast, canEdit = fals
     toast(isEdit ? "Enhancement updated" : "Enhancement created");
     load();
   };
-  const remove = async (row) => {
-    if (!confirm(`Delete ${row.ticket}? This also removes its logged effort.`)) return;
-    await api.deleteEnhancement(row.id);
-    setEditing(null);
-    toast("Enhancement deleted");
-    load();
+  const remove = (row) => setConfirmDel(row);   // open styled confirm (no native dialog)
+  const doRemove = async () => {
+    const row = confirmDel;
+    setConfirmDel(null);
+    if (!row) return;
+    try { await api.deleteEnhancement(row.id); setEditing(null); toast("Enhancement deleted"); load(); }
+    catch (e) { toast(e.message, "error"); }
   };
 
   return (
@@ -277,7 +281,7 @@ export default function Enhancements({ lookups, resources, toast, canEdit = fals
       </div>
 
       <div className="card list-scroll">
-        {!rows ? <Spinner /> : rows.length === 0 ? (
+        {err && !rows ? <LoadError error={err} onRetry={load} /> : !rows ? <Spinner /> : rows.length === 0 ? (
           <Empty icon="🔍" title="No enhancements match" sub="Adjust filters or add a new one." />
         ) : (
           <table>
@@ -325,6 +329,18 @@ export default function Enhancements({ lookups, resources, toast, canEdit = fals
           lookups={lookups} resources={resources}
           onSave={save} onDelete={remove} onClose={() => setEditing(null)}
         />
+      )}
+
+      {confirmDel && (
+        <Modal title={`Delete ${confirmDel.ticket}?`} onClose={() => setConfirmDel(null)}
+          footer={<>
+            <button className="btn btn-ghost" onClick={() => setConfirmDel(null)}>Cancel</button>
+            <button className="btn btn-danger" onClick={doRemove}>Delete</button>
+          </>}>
+          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+            This permanently deletes <b>{confirmDel.ticket}</b> — {confirmDel.title} — and all of its logged effort. This can't be undone.
+          </div>
+        </Modal>
       )}
 
       {exporting && (

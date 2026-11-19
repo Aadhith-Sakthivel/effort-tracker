@@ -5,11 +5,20 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..db import Effort, Enhancement, Resource, Status, enhancement_group, get_db
+from ..db import Effort, Enhancement, Grp, Resource, Status, enhancement_group, get_db
 from ..schemas import KPI
 from ..tz import est_today, month_bounds
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+
+
+def _grp_label_map(db: Session) -> dict[str, str]:
+    """Map group code → display label (so custom groups show their name, not cg_…)."""
+    return {code: label for code, label in db.execute(select(Grp.code, Grp.label)).all()}
+
+
+def _grp_name(code: str | None, labels: dict[str, str]) -> str:
+    return labels.get(code, code) if code else "Unspecified"
 
 
 @router.get("/kpi", response_model=KPI)
@@ -43,7 +52,8 @@ def by_group(db: Session = Depends(get_db)):
         .join(Enhancement, Enhancement.id == enhancement_group.c.enhancement_id)
         .group_by(enhancement_group.c.grp_code)
     ).all()
-    return [{"grp": g or "Unspecified", "count": c, "approved_hrs": float(h)} for g, c, h in rows]
+    labels = _grp_label_map(db)
+    return [{"grp": _grp_name(g, labels), "count": c, "approved_hrs": float(h)} for g, c, h in rows]
 
 
 @router.get("/hours-by-month")
@@ -86,8 +96,10 @@ def month_summary(month: str | None = None, db: Session = Depends(get_db)):
     if month and len(month) >= 7:
         y, m = int(month[:4]), int(month[5:7])
     else:
-        t = est_today(); y, m = t.year, t.month
-    from datetime import date as _date, timedelta
+        t = est_today()
+        y, m = t.year, t.month
+    from datetime import date as _date
+    from datetime import timedelta
     start, end = month_bounds(_date(y, m, 1))
 
     hours = db.scalar(
@@ -104,8 +116,9 @@ def month_summary(month: str | None = None, db: Session = Depends(get_db)):
         .where(Effort.work_date >= start, Effort.work_date <= end)
         .group_by(enhancement_group.c.grp_code)
     ).all()
+    labels = _grp_label_map(db)
     by_group = sorted(
-        [{"grp": g or "Unspecified", "count": c} for g, c in rows],
+        [{"grp": _grp_name(g, labels), "count": c} for g, c in rows],
         key=lambda x: -x["count"],
     )
 
@@ -146,4 +159,5 @@ def hours_by_group(db: Session = Depends(get_db)):
         .group_by(Enhancement.grp_code)
         .order_by(func.coalesce(func.sum(Effort.hours), 0).desc())
     ).all()
-    return [{"grp": g or "Unspecified", "hours": float(h)} for g, h in rows]
+    labels = _grp_label_map(db)
+    return [{"grp": _grp_name(g, labels), "hours": float(h)} for g, h in rows]

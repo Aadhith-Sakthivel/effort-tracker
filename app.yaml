@@ -8,8 +8,9 @@ command:
   - "app_run.py"
 
 env:
-  # Create all tables on first boot if they don't exist yet (dev convenience;
-  # prod schema is owned by Alembic — see DEVELOPMENT.md).
+  # The public demo uses its own throwaway schema, so tables are created on first
+  # boot (1). For a managed database, Alembic owns the schema (`alembic upgrade head`,
+  # see scripts/migrate-lakebase.ps1 and DEPLOY.md): set this to 0 there.
   - name: "AUTO_INIT_DB"
     value: "1"
   # Bootstrap admins — always get the full-edit (lead) role, even before any
@@ -20,12 +21,15 @@ env:
   # Postgres schema the app owns (the app role can't create tables in "public").
   - name: "PGSCHEMA"
     value: "effort_tracker_demo"
-  # Retired schema from an earlier demo seed; dropped on startup if present.
-  - name: "DROP_SCHEMAS"
-    value: "effort_tracker_app"
   # Load the fictional demo data on first boot when the database is empty.
   - name: "SEED_DEMO"
     value: "1"
   # The Lakebase Database Resource binding injects PGHOST/PGPORT/PGDATABASE/PGUSER/
   # PGSSLMODE. No PGPASSWORD is injected — the app uses its service-principal OAuth
   # token as the Postgres password (see backend/app/lakebase.py).
+  #
+  # CORS: the React SPA is served same-origin by this app, so no cross-origin access
+  # is allowed by default (empty = CORS middleware disabled). Set this to the app's
+  # full https URL ONLY if another origin must call the API.
+  - name: "CORS_ORIGINS"
+    value: ""

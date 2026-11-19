@@ -1,25 +1,47 @@
 // Thin fetch wrapper around the FastAPI backend.
 const BASE = "";
 
-async function req(path, opts = {}) {
-  const res = await fetch(BASE + path, {
-    headers: { "Content-Type": "application/json" },
-    ...opts,
-  });
-  if (!res.ok) {
-    let detail = res.statusText;
+const TIMEOUT_MS = 15000;
+
+async function req(path, opts = {}, { timeout = TIMEOUT_MS, retries = 1 } = {}) {
+  const method = (opts.method || "GET").toUpperCase();
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
     try {
-      const body = await res.json();
-      const d = body?.detail ?? body;
-      if (Array.isArray(d)) detail = d.map((x) => x?.msg || x?.message || JSON.stringify(x)).join("; ");
-      else if (typeof d === "string") detail = d;
-      else if (d && typeof d === "object") detail = d.msg || d.message || JSON.stringify(d);
-      else if (d) detail = String(d);
-    } catch {}
-    throw new Error(detail);
+      const res = await fetch(BASE + path, {
+        ...opts,
+        signal: ctrl.signal,
+        // X-Requested-With marks this as a same-origin XHR; the backend requires it on
+        // state-changing calls as a CSRF guard (a cross-site form can't set it).
+        headers: { "Content-Type": "application/json", "X-Requested-With": "effort-tracker", ...(opts.headers || {}) },
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        let detail = res.statusText;
+        try {
+          const body = await res.json();
+          const d = body?.detail ?? body;
+          if (Array.isArray(d)) detail = d.map((x) => x?.msg || x?.message || JSON.stringify(x)).join("; ");
+          else if (typeof d === "string") detail = d;
+          else if (d && typeof d === "object") detail = d.msg || d.message || JSON.stringify(d);
+          else if (d) detail = String(d);
+        } catch {}
+        throw new Error(detail);
+      }
+      if (res.status === 204) return null;
+      return res.json();
+    } catch (e) {
+      clearTimeout(timer);
+      // Only retry idempotent GETs on a timeout/network blip (e.g. Lakebase cold
+      // start) — never retry a real HTTP error (4xx/5xx) or a non-GET write.
+      const transient = e.name === "AbortError" || e instanceof TypeError;
+      lastErr = e.name === "AbortError" ? new Error("Request timed out — the server may be waking up. Please retry.") : e;
+      if (attempt < retries && method === "GET" && transient) continue;
+      throw lastErr;
+    }
   }
-  if (res.status === 204) return null;
-  return res.json();
 }
 
 const qs = (params) => {
@@ -30,14 +52,12 @@ const qs = (params) => {
 export const api = {
   me: () => req("/api/me"),
   lookups: () => req("/api/lookups"),
-  resources: (f) => req("/api/resources" + qs(f)),
+  // List views request up to the server's hard max (500); callers can override `limit`.
+  resources: (f) => req("/api/resources" + qs({ limit: 500, ...f })),
   createResource: (b) => req("/api/resources", { method: "POST", body: JSON.stringify(b) }),
   updateResource: (id, b) => req(`/api/resources/${id}`, { method: "PUT", body: JSON.stringify(b) }),
 
-  timesheet: (f) => req("/api/timesheet" + qs(f)),
-  setCell: (b) => req("/api/timesheet/cell", { method: "PUT", body: JSON.stringify(b) }),
-  cellDetail: (f) => req("/api/timesheet/cell-detail" + qs(f)),
-  setCellGroups: (b) => req("/api/timesheet/cell-groups", { method: "PUT", body: JSON.stringify(b) }),
+  timesheet: (f) => req("/api/timesheet" + qs({ limit: 500, ...f })),
   setCellGroup: (b) => req("/api/timesheet/cell-group", { method: "PUT", body: JSON.stringify(b) }),
 
   settings: () => req("/api/settings"),
@@ -46,8 +66,10 @@ export const api = {
   updateStatus: (code, b) => req(`/api/settings/statuses/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(b) }),
   createSubStatus: (b) => req("/api/settings/sub-statuses", { method: "POST", body: JSON.stringify(b) }),
   updateSubStatus: (code, b) => req(`/api/settings/sub-statuses/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(b) }),
+  createGroup: (b) => req("/api/settings/groups", { method: "POST", body: JSON.stringify(b) }),
+  updateGroup: (code, b) => req(`/api/settings/groups/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(b) }),
 
-  enhancements: (f) => req("/api/enhancements" + qs(f)),
+  enhancements: (f) => req("/api/enhancements" + qs({ limit: 500, ...f })),
   enhancement: (id) => req(`/api/enhancements/${id}`),
   createEnhancement: (b) => req("/api/enhancements", { method: "POST", body: JSON.stringify(b) }),
   updateEnhancement: (id, b) => req(`/api/enhancements/${id}`, { method: "PUT", body: JSON.stringify(b) }),

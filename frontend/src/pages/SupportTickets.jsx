@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
-import { ChipMultiSelect, Empty, GlassSelect, Modal, Pill, Select, Spinner } from "../components/ui";
+import { ChipMultiSelect, Empty, GlassSelect, LoadError, Modal, Pill, Select, Spinner } from "../components/ui";
 import { Avatars, fmtET } from "../components/format";
 
 const STATUSES = ["In Queue", "In Progress", "Hold", "Completed", "Cancelled"];
@@ -149,13 +149,14 @@ function TicketDetail({ ticket, canEdit, canEditAll, toast, onClose, onEdit, onC
 // --- Page --------------------------------------------------------------
 export default function SupportTickets({ toast, resources, canEditAll = false, canEdit = false }) {
   const [rows, setRows] = useState(null);
+  const [err, setErr] = useState(null);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState(null);
   const [detail, setDetail] = useState(null);
 
-  const load = () => { api.supportTickets({ active_only: !showInactive }).then(setRows); };
+  const load = () => { setErr(null); api.supportTickets({ active_only: !showInactive }).then(setRows).catch(setErr); };
   useEffect(() => { load(); }, [showInactive]);   // wrap so the effect never returns the Promise
 
   const save = async (body, isEdit) => {
@@ -188,7 +189,7 @@ export default function SupportTickets({ toast, resources, canEditAll = false, c
       </div>
 
       <div className="card table-wrap">
-        {!rows ? <Spinner /> : filtered.length === 0 ? (
+        {err && !rows ? <LoadError error={err} onRetry={load} /> : !rows ? <Spinner /> : filtered.length === 0 ? (
           <Empty icon="🎫" title="No support tickets" sub={canEditAll ? "Add the first ticket." : "Nothing here yet."} />
         ) : (
           <table>

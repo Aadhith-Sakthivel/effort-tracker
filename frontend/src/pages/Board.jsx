@@ -28,7 +28,7 @@ function solidDragImage(ev) {
   try { ev.dataTransfer.setDragImage(clone, 24, 22); } catch { /* older browsers */ }
   setTimeout(() => clone.remove(), 0);
 }
-import { Empty, GlassSelect, Modal, Pill, Spinner, fmtHrs } from "../components/ui";
+import { Empty, GlassSelect, LoadError, Modal, Pill, Spinner, fmtHrs } from "../components/ui";
 import { Avatars, fmtET } from "../components/format";
 
 // Doughnut of logged time vs approved budget for one enhancement.
@@ -77,6 +77,7 @@ function MiniCalendar({ efforts }) {
   (efforts || []).forEach((e) => { if (e.hours) hoursByDate[e.work_date] = (hoursByDate[e.work_date] || 0) + Number(e.hours); });
   const dates = Object.keys(hoursByDate).sort();
   const latest = dates.length ? dates[dates.length - 1] : null;
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- false positive: MiniCalendar is a component, this hook is top-level
   const [ym, setYm] = useState(() => {
     const b = latest ? new Date(latest + "T00:00:00") : new Date();
     return { y: b.getFullYear(), m: b.getMonth() };
@@ -135,8 +136,6 @@ function MiniCalendar({ efforts }) {
 // --- Card detail + comments + activity ---------------------------------
 function CardDetail({ enh, lookups, toast, canEdit = false, onClose, onChanged }) {
   const [full, setFull] = useState(enh);
-  const [activity, setActivity] = useState(null);
-  const [notes, setNotes] = useState(null);
   const [efforts, setEfforts] = useState(null);
   const [comment, setComment] = useState("");   // fresh note to add — not prefilled
   const [groupDetail, setGroupDetail] = useState(null);   // { groups: [{code,label,sub_status_code,thread}] }
@@ -157,8 +156,6 @@ function CardDetail({ enh, lookups, toast, canEdit = false, onClose, onChanged }
   const [savingChg, setSavingChg] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const loadActivity = () =>
-    api.audit({ entity_type: "enhancement", entity_id: enh.id, limit: 100 }).then(setActivity);
   const loadGroups = () =>
     api.enhancementGroupDetail(enh.id).then((d) => {
       setGroupDetail(d);
@@ -167,13 +164,8 @@ function CardDetail({ enh, lookups, toast, canEdit = false, onClose, onChanged }
 
   useEffect(() => {
     api.enhancement(enh.id).then((e) => { setFull(e); setSubStatus(e.sub_status_code || ""); setDocUrl(e.doc_url || ""); setChg(e.change_ticket || ""); });
-    loadActivity();
     loadGroups();
-    api.efforts({ enhancement_id: enh.id }).then((e) => {
-      setEfforts(e);
-      setNotes(e.filter((x) => x.note && x.note !== "migrated from Excel")
-                .sort((a, b) => (a.work_date < b.work_date ? 1 : -1)));
-    });
+    api.efforts({ enhancement_id: enh.id }).then(setEfforts);
   }, [enh.id]);
 
   // Card-level comment: broadcasts to every group tab (grp_code = null).
@@ -186,7 +178,6 @@ function CardDetail({ enh, lookups, toast, canEdit = false, onClose, onChanged }
       setGroupDetail(d);
       setFull((f) => ({ ...f, comments: (f.comments ? f.comments + "\n" : "") + text }));
       setComment(""); setAddingCard(false);
-      loadActivity();
       toast("Comment added to all groups");
       onChanged?.();
     } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
@@ -228,7 +219,7 @@ function CardDetail({ enh, lookups, toast, canEdit = false, onClose, onChanged }
     try {
       await api.updateEnhancement(enh.id, { sub_status_code: val || null });
       setFull((f) => ({ ...f, sub_status_code: val || null }));
-      loadActivity();
+      loadGroups();   // refresh group threads so the broadcast "Sub-status → …" entry shows
       toast("Sub-status updated");
       onChanged?.();
     } catch (e) { toast(e.message, "error"); setSubStatus(prev); }
@@ -270,24 +261,6 @@ function CardDetail({ enh, lookups, toast, canEdit = false, onClose, onChanged }
     return `https://your-instance.service-now.com/now/nav/ui/classic/params/target/${encodeURIComponent(inner)}`;
   };
 
-  const tsVal = (s) => (s && s.length <= 10 ? new Date(s + "T00:00:00")
-    : new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(s || "") ? s : s + "Z"));
-  // Comments are stored as an appended log, so each audit row's new_value contains the
-  // whole blob — show only the line(s) added since the previous value.
-  const addedLine = (a) => {
-    const ov = a.old_value || "", nv = a.new_value || "";
-    return (nv.startsWith(ov) ? nv.slice(ov.length) : nv).replace(/^\n+/, "").trim();
-  };
-  // Unified notes feed: enhancement comments + timesheet notes, newest first.
-  const notesFeed = [
-    ...(activity || []).filter((a) => a.field === "comments")
-      .map((a) => ({ kind: "comment", text: addedLine(a), who: a.changed_by, ts: a.changed_at }))
-      .filter((n) => n.text),
-    ...(notes || []).map((n) => ({ kind: "timesheet", text: n.note, who: n.resource_name, ts: n.work_date, hours: n.hours })),
-  ].sort((a, b) => tsVal(b.ts) - tsVal(a.ts));
-  const changes = (activity || []).filter((a) => a.field !== "comments");
-  const loading = activity === null || notes === null;
-
   // Shared renderer for the Documentation / Implementation-ticket link fields.
   const linkField = ({ label, value, href, openText, editing, setEditing, draft, setDraft, save, saving, placeholder }) => (
     <div className="cd-link-col">
@@ -316,8 +289,6 @@ function CardDetail({ enh, lookups, toast, canEdit = false, onClose, onChanged }
     </div>
   );
 
-  const usedPct = full.approved_hrs ? Math.min(100, Math.round((full.actual_hrs / full.approved_hrs) * 100)) : 0;
-  const hoursOver = full.approved_hrs != null && full.actual_hrs > full.approved_hrs;
 
   return (
     <div className="detail-page page-fade">
@@ -520,6 +491,7 @@ function MoveConfirm({ pending, statusLabel, requireTicket, onConfirm, onCancel 
 // --- Board -------------------------------------------------------------
 export default function Board({ lookups, resources, toast, canEdit = false }) {
   const [rows, setRows] = useState(null);
+  const [err, setErr] = useState(null);
   const [dragId, setDragId] = useState(null);
   const [overCol, setOverCol] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -530,7 +502,7 @@ export default function Board({ lookups, resources, toast, canEdit = false }) {
   const [showInactive, setShowInactive] = useState(false);
 
   // Don't blank existing rows on refetch (avoids flicker); Spinner only shows on first load.
-  const load = () => { api.enhancements({ active_only: false }).then(setRows); };
+  const load = () => { setErr(null); api.enhancements({ active_only: false }).then(setRows).catch(setErr); };
   useEffect(load, []);
 
   // Edge auto-scroll while dragging a card, so far columns are reachable.
@@ -672,7 +644,7 @@ export default function Board({ lookups, resources, toast, canEdit = false }) {
         </label>
       </div>
 
-      {!rows ? <Spinner /> : (
+      {err && !rows ? <LoadError error={err} onRetry={load} /> : !rows ? <Spinner /> : (
         <div className="kanban" ref={kanbanRef} onDragOver={onKanbanDragOver}>
           {orphans.length > 0 && (
             <div className="kcol">

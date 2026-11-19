@@ -6,11 +6,12 @@ commands to apply it. Fill in the placeholders from [DEPLOY.md](DEPLOY.md).
 
 ## TL;DR — is there a schema (table) change?
 
-**No DDL change.** The tables and columns are **identical** to the original app
-(`backend/sql/001_schema.sql` and the ORM in `backend/app/db.py` are unchanged).
-If your Lakebase already ran the original schema, you do **not** need to alter any
-table. The differences are **data + a few lookup labels + one env var** — all applied
-by re-seeding, below.
+**Same tables and columns as the original.** There is **one included Alembic migration**
+beyond a bare baseline — `a048de425e38_timestamp_not_null` — which makes the `created_at`/
+`updated_at` columns `NOT NULL` to match the ORM. Apply it with `alembic upgrade head`
+(the deploy runs `scripts/migrate-lakebase.ps1` for you). On a **fresh** database the seed
+also creates every table via the ORM, so you can skip Alembic for a throwaway DB. No other
+table or column changed. The remaining differences are **data + a few lookup labels + env**.
 
 ## What's in this build
 
@@ -22,6 +23,13 @@ by re-seeding, below.
 4. **Branding** (app code only, no DB impact): product name "Effort Tracker", logo,
    a `your-instance` ServiceNow placeholder, `first.last@example.com` emails.
 5. **Infra values** in `scripts/*.ps1`, `DEPLOY.md` are placeholders — set your own.
+
+6. **Schema is Alembic-managed.** Migrations live in `backend/alembic/versions/`; for a
+   managed database run `alembic upgrade head` (see `scripts/migrate-lakebase.ps1`) and set
+   `AUTO_INIT_DB=0`. The public demo keeps `AUTO_INIT_DB=1` so its fresh schema is created
+   on first boot. A pre-Alembic database must be `alembic stamp head` once first.
+7. **API writes require the `X-Requested-With` header** (CSRF guard in `main.py`); the SPA
+   sends it from `api.js`. The Python seed/ORM scripts bypass HTTP, so they are unaffected.
 
 > Seed into a clean/empty database (or use `--reset`, which wipes app data first) so
 > no row references a lookup code from an older seed.

@@ -108,10 +108,18 @@ jobs:
           databricks workspace import-dir build/app "$src" --overwrite
           # Idle apps get their compute stopped (Free Edition); a deploy needs it running.
           compute=$(databricks apps get "$APP_NAME" --output json | jq -r '.compute_status.state')
-          if [ "$compute" != "ACTIVE" ]; then
-            echo "App compute is $compute; starting it before deploying..."
-            databricks apps start "$APP_NAME"
+          if [ "$compute" = "STOPPED" ]; then
+            echo "App compute is stopped; starting it..."
+            databricks apps start "$APP_NAME" --no-wait
           fi
+          # Wait (up to 10 min) for the compute to be ACTIVE, whatever state it was in.
+          for i in $(seq 1 60); do
+            compute=$(databricks apps get "$APP_NAME" --output json | jq -r '.compute_status.state')
+            [ "$compute" = "ACTIVE" ] && break
+            echo "Compute is $compute; waiting..."
+            sleep 10
+          done
+          if [ "$compute" != "ACTIVE" ]; then echo "::error::App compute never became ACTIVE ($compute)"; exit 1; fi
           databricks apps deploy "$APP_NAME" --source-code-path "$src"
       - name: Smoke-check the app
         if: steps.secrets.outputs.ready == 'true'

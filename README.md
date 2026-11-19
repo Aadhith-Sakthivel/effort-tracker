@@ -32,6 +32,11 @@ no audit trail) with a validated, logged web app deployed as a **Databricks App*
   <img alt="Enhancements list" src="docs/screenshots/enhancements.jpg">
 </picture>
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/card-detail-dark.jpg">
+  <img alt="Enhancement detail opened from the board: groups, team, hours against budget, time logged by day, activity feed" src="docs/screenshots/card-detail.jpg">
+</picture>
+
 <sub>Screenshots follow your GitHub theme: dark mode shows the app's dark theme. All data is fictional.</sub>
 
 ## Why this exists

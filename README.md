@@ -68,6 +68,30 @@ React SPA (clean, minimal UI)  ──HTTP──>  FastAPI  ──SQL──>  Lak
 - `support_ticket` / `support_comment` — standalone support tracker with an activity feed.
 - `audit_log` — append-only who/when/old→new.
 
+Schema changes are versioned with **Alembic** (`backend/alembic/versions/`); see
+[DEVELOPMENT.md](DEVELOPMENT.md).
+
+## Roles
+
+Identity comes from Databricks SSO; the role is checked on the server for every request.
+
+| Role | Who | Can do |
+|---|---|---|
+| **Lead** | `ADMIN_EMAILS`, or a team member flagged `is_lead` | Everything: edit enhancements and the team, change settings, read the audit log |
+| **Member** | Any active team member | Log time, move cards on the board, update their own contact details |
+| **Viewer** | Anyone else signed in | Read every page except the audit log; Settings is read-only |
+
+## Security
+
+- **CSRF guard:** every API write must send an `X-Requested-With` header. The app's own
+  frontend sends it; a forged request from another site can't.
+- **Security headers** on every response: Content-Security-Policy, `X-Frame-Options: DENY`,
+  `nosniff`, HSTS and a strict referrer policy.
+- **Path-traversal guard:** the server only serves files from the built frontend.
+- **CORS off by default;** enable it only for named origins via `CORS_ORIGINS`.
+- **Structured JSON logs;** refused requests are logged as `authz_denied` with the user.
+- **Input limits** on text fields and **pagination** (`limit`/`offset`, max 500) on lists.
+
 ## Run it locally
 
 ```bash
@@ -89,41 +113,68 @@ npm run dev            # http://localhost:5173  (proxies /api to :8000)
 Production build (served by FastAPI itself): `cd frontend && npm run build` →
 emits `frontend/dist`, which `app.main` serves at `/`.
 
-## Deploy to Databricks
+To run the API with the demo data loaded automatically, start it with `SEED_DEMO=1`.
+
+## Tests and checks
+
+```bash
+cd backend && python -m pytest        # 27 API tests on a throwaway SQLite DB
+python -m ruff check app              # lint
+cd ../frontend && npm run lint        # ESLint
+```
+
+## CI/CD
+
+`.github/workflows/ci-cd.yml` runs on every push and pull request:
+
+1. **Backend:** ruff, bandit (security lint), pip-audit (advisory), pytest.
+2. **Frontend:** npm audit (advisory), ESLint, production build.
+3. **Deploy** (pushes to `main` only): bundles the app, uploads it to the workspace, starts
+   the app if Databricks has stopped it, runs `databricks apps deploy`, then checks it is running.
+
+Deploy needs three repository secrets: `DATABRICKS_HOST`, `DATABRICKS_TOKEN` and
+`ADMIN_EMAILS`. Without them the deploy job is skipped and the checks still run.
+
+## Deploy to Databricks (first time)
 
 See **[DEPLOY.md](DEPLOY.md)** for the full walkthrough and **[DATABASE.md](DATABASE.md)**
-for the schema + exactly what to run against Lakebase. In short:
+for the schema. In short:
 
-1. **Create a Lakebase database** in the workspace (SQL → Lakebase).
-2. Build the frontend (`npm run build`) so `frontend/dist` exists.
-3. `databricks sync` the repo to your workspace, then `databricks apps create effort-tracker`.
-4. Add the Lakebase instance as an **app Resource** (injects `PG*`; the app uses its
+1. **Create a Lakebase database** in the workspace and the app (`databricks apps create effort-tracker`).
+2. Add the Lakebase database as an **app Resource** (injects `PG*`; the app uses its
    service-principal OAuth token as the Postgres password).
-5. Seed the schema + fictional data: `powershell -File scripts/seed-lakebase.ps1`.
-6. `databricks apps deploy effort-tracker`.
+3. Add the three GitHub secrets above and push to `main`. The demo creates its tables
+   and loads fictional data on first boot (`AUTO_INIT_DB=1`, `SEED_DEMO=1`); for a managed
+   database, run Alembic migrations instead (`scripts/migrate-lakebase.ps1`).
 
-Databricks Apps provide **SSO** automatically — the signed-in workspace user's email
-arrives in `X-Forwarded-Email` and is written to every audit row. `ADMIN_EMAILS` in
-`app.yaml` (set from a deploy secret) always gets the lead role.
+Databricks Apps provide **SSO** automatically: the signed-in user's email arrives in
+`X-Forwarded-Email` and is written to every audit row. `ADMIN_EMAILS` (a deploy secret,
+injected into `app.yaml` at deploy time) always gets the lead role.
 
 ## API surface
+
+All writes (POST/PUT/DELETE) need the `X-Requested-With` header. Lists accept
+`limit` and `offset`.
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/dashboard/*` | KPIs, by-status, by-group, hours-by-month/resource |
-| GET/POST/PUT/DELETE | `/api/enhancements` | ticket CRUD (actual/remaining computed) |
-| GET/POST/PUT/DELETE | `/api/efforts`, `/api/timesheet` | daily time entry (cap + weekly freeze) |
+| GET/POST/PUT/DELETE | `/api/enhancements` | ticket CRUD (actual/remaining computed); delete also removes its comments and groups |
+| GET/POST/PUT/DELETE | `/api/efforts`, `/api/timesheet` | daily time entry: per-person daily cap, weekly lock, month freeze |
 | GET/POST/PUT | `/api/resources` | team members |
-| GET/POST/PUT/DELETE | `/api/support-tickets` | support tracker |
+| GET/POST/PUT/DELETE | `/api/support-tickets` | support tracker (can only be closed once its status is final) |
 | GET | `/api/lookups` | dropdown values |
-| GET | `/api/audit` | change history |
-| GET/PUT | `/api/settings` | freeze rule, daily cap, lookups (leads) |
+| GET | `/api/audit` | change history (leads only) |
+| GET/PUT/POST | `/api/settings` | freeze rule, statuses, groups (anyone reads; leads change) |
+| GET | `/api/me`, `/api/health` | current user and role; health check |
 
 ## Project layout
 
 ```
+.github/workflows/ci-cd.yml   lint, security checks, tests, build, deploy
 backend/
-  app/            FastAPI app (routers, models, schemas, audit, auth)
+  app/            FastAPI app (routers, models, schemas, audit, auth, logging)
+  alembic/        versioned schema migrations
   sql/001_schema.sql   Lakebase/Postgres DDL
   tests/          API behaviour tests (throwaway SQLite)
 frontend/
@@ -132,5 +183,8 @@ frontend/
 migration/
   seed_dummy.py        generate fictional demo data (SQLite or Lakebase)
   migrate_excel.py     optional: import a real workbook (un-pivots a wide daily grid)
+scripts/
+  build_bundle.py      assemble the deployable app (used by CI)
+  *.ps1                manual helpers: seed, migrate, grant, deploy
 app.yaml          Databricks App spec
 ```

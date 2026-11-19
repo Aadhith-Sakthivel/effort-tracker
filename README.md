@@ -9,13 +9,30 @@ no audit trail) with a validated, logged web app deployed as a **Databricks App*
 
 ![CI/CD](https://github.com/Aadhith-Sakthivel/effort-tracker/actions/workflows/ci-cd.yml/badge.svg)
 
-![Overview](docs/screenshots/overview.jpg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/overview-dark.jpg">
+  <img alt="Overview dashboard" src="docs/screenshots/overview.jpg">
+</picture>
 
-| Board | Timesheet |
-|---|---|
-| ![Board](docs/screenshots/board.jpg) | ![Timesheet](docs/screenshots/timesheet.jpg) |
+<table>
+  <tr>
+    <td><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/board-dark.jpg">
+  <img alt="Kanban board" src="docs/screenshots/board.jpg">
+</picture></td>
+    <td><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/timesheet-dark.jpg">
+  <img alt="Month timesheet" src="docs/screenshots/timesheet.jpg">
+</picture></td>
+  </tr>
+</table>
 
-![Enhancements](docs/screenshots/enhancements.jpg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/enhancements-dark.jpg">
+  <img alt="Enhancements list" src="docs/screenshots/enhancements.jpg">
+</picture>
+
+<sub>Screenshots follow your GitHub theme: dark mode shows the app's dark theme. All data is fictional.</sub>
 
 ## Why this exists
 

@@ -106,6 +106,12 @@ jobs:
           me=$(databricks current-user me --output json | jq -r .userName)
           src="/Workspace/Users/$me/$APP_NAME"
           databricks workspace import-dir build/app "$src" --overwrite
+          # Idle apps get their compute stopped (Free Edition); a deploy needs it running.
+          compute=$(databricks apps get "$APP_NAME" --output json | jq -r '.compute_status.state')
+          if [ "$compute" != "ACTIVE" ]; then
+            echo "App compute is $compute; starting it before deploying..."
+            databricks apps start "$APP_NAME"
+          fi
           databricks apps deploy "$APP_NAME" --source-code-path "$src"
       - name: Smoke-check the app
         if: steps.secrets.outputs.ready == 'true'
